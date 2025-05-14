@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ExcelColumns(Enum):
     TABLE_NAME = "tableName"
     NAME = "name"
@@ -10,6 +11,7 @@ class ExcelColumns(Enum):
     TO_ADD = "to_add"
     EXISTS = "exists"
     COMMON_ERROR = "common_error"
+
 
 class LayerNameExcel(Enum):
     LINE_REMARKS_DISCUSSION_1 = "line_remarks_discussion_1"

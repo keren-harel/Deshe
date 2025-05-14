@@ -2,31 +2,24 @@ import arcpy
 import os
 import sys
 from pathlib import Path
-from importlib import reload
 import pandas as pd
 
-ROOT = str(Path(__file__).parents[1].absolute())  # ../pyt_framework
+ROOT = str(Path(__file__).parents[1].absolute())
+sys.path.append(str(ROOT))
 
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-if rf"{ROOT}\enums" not in sys.path:
-    sys.path.insert(1, rf"{ROOT}\enums")
+import enums as pyt_reload_enums
 
-# Inline reloader of dynamic modules
 [
     print(f"Reloaded {reload(module).__name__}")
     for module_name, module in globals().items()
     if module_name.startswith("pyt_reload")
 ]
 
-# Import the Tool Importer function
 import enums.domains as domains
 from enums.excel_values import ExcelColumns
 
-
 def load_excel_data(excel_path, sheet_name):
     return pd.read_excel(excel_path, sheet_name=sheet_name)
-
 
 def add_field(layer_path, field_name, field_alias, field_type):
     arcpy.AddField_management(
