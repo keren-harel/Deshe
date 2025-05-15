@@ -12,9 +12,9 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.2.2025 - unite stands\smy_survey_Alonim_BKP_270724.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_dev')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Alonim')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_3233_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_Tzora')
     input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\עבודה\configuration'
     input_beitGidul = "ים-תיכוני"
 else:
@@ -1369,7 +1369,7 @@ class FcRow:
         del rel_Uc
 
 class StandPolygon(FcRow):
-    #Each poygon in stands FC get an object.
+    #Each poygon in stands FC gets an object.
     def __init__(self, row, standsFC):
         FcRow.__init__(self, row, standsFC)
         arcpy.AddMessage('Started calculating: stand %s = %s'% (self.FC.oidFieldName, self.id))
@@ -1576,7 +1576,7 @@ class StandPolygon(FcRow):
 
     def calculateAndWrite(self):
         """
-        An module that runs calculation methods (c__...) and
+        A module that runs calculation methods (c__...) and
         writes their results into stand row, or its related
         tables.
         """
@@ -1694,19 +1694,15 @@ class StandPolygon(FcRow):
         self.writeSelf(50044, self.v__relativedensity)
 
 
-        subTreeSpTuples = self.c__speciesTuple(40074)
-        self.v__subtreespnames = subTreeSpTuples['names']
-        self.v__subtreespcodes = subTreeSpTuples['codes']
+        self.v__supSpecies_trees = self.c__subSpecies(40074)
         self.writeSelf(
             [50059,50060],
-            [self.v__subtreespnames,self.v__subtreespcodes]
+            [self.v__supSpecies_trees['names'],self.v__supSpecies_trees['codes']]
             )
-        shrubSpTuple = self.c__speciesTuple(40082)
-        self.v__subbushspnames = shrubSpTuple['names']
-        self.v__subbushspcodes = shrubSpTuple['codes']
+        self.v__supSpecies_shrubs = self.c__subSpecies(40082)
         self.writeSelf(
             [50061,50062],
-            [self.v__subbushspnames,self.v__subbushspcodes]
+            [self.v__supSpecies_shrubs['names'],self.v__supSpecies_shrubs['codes']]
             )
 
         self.v__deadtreespercent = self.c__treeharmindex(40059)
@@ -1754,13 +1750,21 @@ class StandPolygon(FcRow):
         self.writeSelf(50074, self.v__invasivespecies_desc)
 
         self.v__naturalvalues = self.c__naturalvalues()
-        self.writeSelf(50075, self.v__naturalvalues)
+        self.writeSelf(50075, self.v__naturalvalues['main'])
+        self.writeSelf(50103, self.v__naturalvalues['details'])
+
         self.v__roadsidesconditions = self.c__roadsidesconditions()
-        self.writeSelf(50076, self.v__roadsidesconditions)
+        self.writeSelf(50076, self.v__roadsidesconditions['main'])
+        self.writeSelf(50104, self.v__roadsidesconditions['details'])
+
         self.v__limitedaccessibilitytype = self.c__limitedaccessibilitytype()
-        self.writeSelf(50077, self.v__limitedaccessibilitytype)
+        self.writeSelf(50077, self.v__limitedaccessibilitytype['main'])
+        self.writeSelf(50105, self.v__limitedaccessibilitytype['details'])
+
         self.v__foresthazards = self.c__foresthazards()
-        self.writeSelf(50078, self.v__foresthazards)
+        self.writeSelf(50078, self.v__foresthazards['main'])
+        self.writeSelf(50106, self.v__foresthazards['details'])
+
 
         self.v__totalcoverage = self.c__totalcoverage()
         self.writeSelf(50088, self.v__totalcoverage)
@@ -1828,7 +1832,6 @@ class StandPolygon(FcRow):
         """
         Calculates stand's primary and secondary layers' attributes:
         forest layer, veg form, layer cover, layer desc.
-
         """
         stepName = 'logiclayers'
         #The method returns outDict
@@ -3395,7 +3398,7 @@ class StandPolygon(FcRow):
         else:
             return None
 
-    def c__speciesTuple(self, codesFieldCode):
+    def c__subSpecies(self, codesFieldCode):
         """
         Takes values from the codes field of the seker point, and 
         returns a dict of the 3 most frequent codes and names
@@ -3800,7 +3803,6 @@ class StandPolygon(FcRow):
             "פלפלון דמוי-אלה",
             "פרקנסוניה שיכנית",
             "צחר כחלחל",
-            "קיקיון מצוי",
             "שיטה ויקטוריה",
             "שיטה כחלחלה",
             "שיטה סליצינה (עלי ערבה)",
@@ -3904,7 +3906,6 @@ class StandPolygon(FcRow):
         else: return "אין"
         """
         rawValues = self.getRelatedValues('sp', 40063)
-        IDs = self.getRelatedValues('sp', 40000)
         domainValues = [
             None,
             "אין",
@@ -3922,18 +3923,21 @@ class StandPolygon(FcRow):
         ]
         defaultValue = domainValues[1] #'אין'
         elseValue = domainValues[12] #'אחר'
+        resultsDict = {
+            'main': defaultValue,
+            'details': None
+        }
 
         #make sure all values are valid:
         validValues = []
         for i in range(len(rawValues)):
             rawValue = rawValues[i]
-            point_id = IDs[i]
             if rawValue in domainValues:
                 validValues.append(rawValue)
         
         #convert to indexes:
         indexList = [domainValues.index(rv) for rv in validValues]
-        #indexes to be removed: לא רלוונטי or None
+        #indexes to be removed:
         for indexToRemove in [0, 1]:
             while indexToRemove in indexList:
                 indexList.remove(indexToRemove)
@@ -3943,14 +3947,28 @@ class StandPolygon(FcRow):
             #sort by frequency, remove duplications.
             indexList_sorted = freqSorted(indexList)
             #convert indexes back to values:
-            valList = [domainValues[i] for i in indexList]
-            #move "אחר" to end (if exists).
-            valList = makeLast(valList, elseValue)
+            valList = [domainValues[i] for i in indexList_sorted]
+            if elseValue in valList:
+                #1) move elseValue to end (if exists)
+                valList = makeLast(valList, elseValue)
+                #2) copy free text from the details field
+                detailsList = self.getRelatedValues('sp', 40092)
+                detailsList = removeDup(detailsList)
+                for valueToRemove in ['',' ', None]:
+                    while valueToRemove in detailsList:
+                        detailsList.remove(valueToRemove)
+                if detailsList:
+                    # concatenate using "; "
+                    resultsDict['details'] = '; '.join(detailsList)
+            #remove default value if it exists along with other values
+            if (defaultValue in valList) and (len(valList)>1):
+                valList.remove(defaultValue)
             #concatenate:
-            return ",".join(valList)
+            resultsDict['main'] = ",".join(valList)
+            return resultsDict
         else:
-            #list is empty, return "אין"
-            return defaultValue
+            #list is empty, return defaultValue
+            return resultsDict
 
     def c__roadsidesconditions(self):
         """
@@ -3964,6 +3982,10 @@ class StandPolygon(FcRow):
         valuesToOmit = ["", " "]
         defaultValue = "תקין"
         elseValue = "אחר"
+        resultsDict = {
+            'main': defaultValue,
+            'details': None
+        }
 
         #valid values are single values.
         validValues = []
@@ -3976,19 +3998,29 @@ class StandPolygon(FcRow):
                         validValues.append(splitValue)
         
         if validValues:
-            #sort by frequency, remove duplications, 
-            #and move "אחר" to end (if exists).
+            #sort by frequency, remove duplications.
             validValues_sorted = freqSorted(validValues)
-            validValues_sorted = makeLast(validValues_sorted, elseValue)
-            #if other values exist except default value ('תקין') → 
-            #remove 'תקין'.
+            if elseValue in validValues_sorted:
+                #1) move elseValue to end (if exists)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
+                #2) copy free text from the details field
+                detailsList = self.getRelatedValues('sp', 40093)
+                detailsList = removeDup(detailsList)
+                for valueToRemove in ['',' ', None]:
+                    while valueToRemove in detailsList:
+                        detailsList.remove(valueToRemove)
+                if detailsList:
+                    # concatenate using "; "
+                    resultsDict['details'] = '; '.join(detailsList)
+            #remove default value if it exists along with other values
             if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
                 validValues_sorted.remove(defaultValue)
             #concatenate:
-            return ",".join(validValues_sorted)
+            resultsDict['main'] = ",".join(validValues_sorted)
+            return resultsDict
         else:
-            #list is empty, return "תקין"
-            return defaultValue
+            #list is empty, return defaultValue
+            return resultsDict
 
     def c__limitedaccessibilitytype(self):
         """
@@ -4002,41 +4034,10 @@ class StandPolygon(FcRow):
         valuesToOmit = ["", " "]
         defaultValue = "אין"
         elseValue = "אחר"
-
-        #valid values are single values.
-        validValues = []
-        for rawValue in rawValues:
-            if rawValue:
-                #rawValue of None/""/" " won't get here.
-                splitList = rawValue.split(',')
-                for splitValue in splitList:
-                    if splitValue not in valuesToOmit:
-                        validValues.append(splitValue)
-
-        if validValues:
-            #sort by frequency, remove duplications, 
-            #and move "אחר" to end (if exists).
-            validValues_sorted = freqSorted(validValues)
-            validValues_sorted = makeLast(validValues_sorted, elseValue)
-            #if other values exist except default value ('אין') → 
-            #remove 'אין'.
-            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
-                validValues_sorted.remove(defaultValue)
-            #concatenate:
-            return ",".join(validValues_sorted)
-        else:
-            #list is empty, return "תקין"
-            return defaultValue
-
-    def c__foresthazards(self):
-        """
-        """
-        #rawValues is a list of row values (string),
-        #each string is a concatenation with ","s.
-        rawValues = self.getRelatedValues('sp', 40066)
-        valuesToOmit = ["", " ", None]
-        defaultValue = "אין"
-        elseValue = "אחר"
+        resultsDict = {
+            'main': defaultValue,
+            'details': None
+        }
 
         #valid values are single values.
         validValues = []
@@ -4049,19 +4050,81 @@ class StandPolygon(FcRow):
                         validValues.append(splitValue)
         
         if validValues:
-            #sort by frequency, remove duplications, 
-            #and move "אחר" to end (if exists).
+            #sort by frequency, remove duplications.
             validValues_sorted = freqSorted(validValues)
-            validValues_sorted = makeLast(validValues_sorted, elseValue)
-            #if other values exist except default value ('אין') → 
-            #remove 'אין'.
+            if elseValue in validValues_sorted:
+                #1) move elseValue to end (if exists)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
+                #2) copy free text from the details field
+                detailsList = self.getRelatedValues('sp', 40094)
+                detailsList = removeDup(detailsList)
+                for valueToRemove in ['',' ', None]:
+                    while valueToRemove in detailsList:
+                        detailsList.remove(valueToRemove)
+                if detailsList:
+                    # concatenate using "; "
+                    resultsDict['details'] = '; '.join(detailsList)
+            #remove default value if it exists along with other values
             if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
                 validValues_sorted.remove(defaultValue)
             #concatenate:
-            return ",".join(validValues_sorted)
+            resultsDict['main'] = ",".join(validValues_sorted)
+            return resultsDict
         else:
-            #list is empty, return "תקין"
-            return defaultValue
+            #list is empty, return defaultValue
+            return resultsDict
+
+    def c__foresthazards(self):
+        """
+        Each row value is a concat with ",",
+        remove unwanted values and duplications.
+        If "תקין" coexists with other values - remove it.
+        """
+        #rawValues is a list of row values (string),
+        #each string is a concatenation with ","s.
+        rawValues = self.getRelatedValues('sp', 40066)
+        valuesToOmit = ["", " ", None]
+        defaultValue = "אין"
+        elseValue = "אחר"
+        resultsDict = {
+            'main': defaultValue,
+            'details': None
+        }
+
+        #valid values are single values.
+        validValues = []
+        for rawValue in rawValues:
+            if rawValue:
+                #rawValue of None/""/" " won't get here.
+                splitList = rawValue.split(',')
+                for splitValue in splitList:
+                    if splitValue not in valuesToOmit:
+                        validValues.append(splitValue)
+        
+        if validValues:
+            #sort by frequency, remove duplications.
+            validValues_sorted = freqSorted(validValues)
+            if elseValue in validValues_sorted:
+                #1) move elseValue to end (if exists)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
+                #2) copy free text from the details field
+                detailsList = self.getRelatedValues('sp', 40095)
+                detailsList = removeDup(detailsList)
+                for valueToRemove in ['',' ', None]:
+                    while valueToRemove in detailsList:
+                        detailsList.remove(valueToRemove)
+                if detailsList:
+                    # concatenate using "; "
+                    resultsDict['details'] = '; '.join(detailsList)
+            #remove default value if it exists along with other values
+            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
+                validValues_sorted.remove(defaultValue)
+            #concatenate:
+            resultsDict['main'] = ",".join(validValues_sorted)
+            return resultsDict
+        else:
+            #list is empty, return defaultValue
+            return resultsDict
 
     def c__forestdegeneration(self):
         """
