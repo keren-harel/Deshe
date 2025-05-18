@@ -1171,7 +1171,7 @@ class SekerPoint(FcRow):
 
     def calculateAndWrite(self):
         """
-        An module that runs calculation methods (c__...) and
+        A module that runs calculation methods (c__...) and
         writes their results into stand row, or its related
         tables.
         """
@@ -1324,7 +1324,6 @@ class SekerPoint(FcRow):
         """
         Calculates sekerpoint's primary and secondary layers' attributes:
         forest layer, veg form, layer cover, layer desc.
-
         """
         stepName = 'logiclayers'
         #The method returns outDict
