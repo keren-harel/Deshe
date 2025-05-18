@@ -3685,7 +3685,6 @@ class PoductPolygon(FcRow):
             }
             return outdict
 
-
     def c__totalcoverage(self):
         stepName = 'totalcoverage'
 
@@ -3972,12 +3971,12 @@ class PoductPolygon(FcRow):
             'names': ','.join([str(x) for x in names])
         }
         return outdict
-        
+    
     def c__naturalvalues(self):
         """
-        Removes None and "אין" values,
-        if other values exist → remove duplications → concatenate,
-        else: return "אין"
+        Each row value is a concat with ",",
+        remove unwanted values and duplications.
+        If "אין" coexists with other values - remove it.
         """
         stepName = 'naturalvalues'
 
@@ -4002,32 +4001,30 @@ class PoductPolygon(FcRow):
             'main': defaultValue,
             'details': None
         }
+        valuesToOmit = ["", " "]
 
         matrix = self.getMatrix_self(50075)
 
         # VALIDATION:
         validValues = []
         for polygonTup in matrix:
+            #rawValues is a list of row values (string),
+            #each string is a concatenation with ","s.
             rawValue = polygonTup[1]
-            if rawValue in domainValues:
-                validValues.append(rawValue)
-        
-        # convert to indexes:
-        indexList = [domainValues.index(rv) for rv in validValues]
-        # indexes to be removed:
-        for indexToRemove in [0, 1]:
-            while indexToRemove in indexList:
-                indexList.remove(indexToRemove)
+            if rawValue:
+                #rawValue of None/""/" " won't get here.
+                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
+                for splitValue in splitList:
+                    if splitValue in domainValues and splitValue not in valuesToOmit:
+                        validValues.append(splitValue)
         
         # LOGIC:
-        if indexList:
-            #sort by frequency, remove duplications.
-            indexList_sorted = freqSorted(indexList)
-            #convert indexes back to values:
-            valList = [domainValues[i] for i in indexList_sorted]
-            if elseValue in valList:
+        if validValues:
+            #sort by frequency, remove duplications
+            validValues_sorted = freqSorted(validValues)
+            if elseValue in validValues_sorted:
                 #1) move elseValue to end (if exists)
-                valList = makeLast(valList, elseValue)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
                 #2) copy free text from the details field
                 details_matrix = self.getMatrix_self(50103)
                 detailsList = [tup[1] for tup in details_matrix]
@@ -4039,10 +4036,10 @@ class PoductPolygon(FcRow):
                     # concatenate using "; "
                     resultsDict['details'] = '; '.join(detailsList)
             #remove default value if it exists along with other values
-            if (defaultValue in valList) and (len(valList)>1):
-                valList.remove(defaultValue)
+            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
+                validValues_sorted.remove(defaultValue)
             #concatenate:
-            resultsDict['main'] = ",".join(valList)
+            resultsDict['main'] = ",".join(validValues_sorted)
             return resultsDict
         else:
             #list is empty, return defaultValue
@@ -4259,7 +4256,6 @@ class PoductPolygon(FcRow):
             return resultCategory
         else:
             return defaultValue
-
 
     def c__presence(self, mode):
         """

@@ -12,10 +12,10 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3233_fnl')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_Tzora')
-    input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\עבודה\configuration'
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.5.2025\smy_Turan2024_BKP_25082024.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_Turan2024')
+    input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_beitGidul = "ים-תיכוני"
 else:
     input_stands = arcpy.GetParameter(0)
@@ -3930,13 +3930,12 @@ class StandPolygon(FcRow):
 
         #make sure all values are valid:
         validValues = []
-        for i in range(len(rawValues)):
-            rawValue = rawValues[i]
+        for rawValue in rawValues:
             if rawValue in domainValues:
                 validValues.append(rawValue)
         
         #convert to indexes:
-        indexList = [domainValues.index(rv) for rv in validValues]
+        indexList = [domainValues.index(validValue) for validValue in validValues]
         #indexes to be removed:
         for indexToRemove in [0, 1]:
             while indexToRemove in indexList:
