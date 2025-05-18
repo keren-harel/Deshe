@@ -720,6 +720,24 @@ def findNode(rootNode, codedValue):
         #none found - return an empty node.
         return Node()
 
+def findNodeByName_rec(node, name, array):
+    #Appends to array every node that its name  == the one
+    #provided as variable.
+    if node.name == name:
+        array.append(node)
+    for child in node.children:
+        findNodeByName_rec(child, name, array)
+
+def findNodeByName(rootNode, name):
+    #Returns the first node encountered that has the same name.
+    arr = []
+    findNodeByName_rec(rootNode, name, arr)
+    if arr:
+        return arr[0]
+    else:
+        #none found - return an empty node.
+        return Node()
+
 #CLASSES
 class FeatureClass:
     def __init__(self, fullPath):
@@ -1376,6 +1394,142 @@ class LayerResult(Layer):
         #return self.asText()
         validity = {True:'valid',False:'invalid'}[self.isValid]
         return "LayerResult object: %s [%s]." % (self.layerDesc, validity)
+
+class CovtypeResult:
+    #A reciprocal object for SpeciesCompositionResult (classification_may2022_v2.py).
+    #can be used as an empty placeholder
+    def __init__(self, standPolygon = None, speciesComp_matrixObj = None, vegForms_matrixObj = None):
+        self.standPolygon = standPolygon
+        self.speciesComp_matrixObj = speciesComp_matrixObj
+        self.vegForms_matrixObj = vegForms_matrixObj
+        self.mode = None
+        self.assigned = False
+        self.converted = False
+        self.singleNode = Node()
+        self.doubleNode = []
+        #Two values to be used as output:
+        self.str = ""
+        self.code = None
+        
+    def assignStudy(self):
+        self.mode = "study"
+        self.assigned = True
+        self.str = "מחקר"
+        self.code = 9970
+
+    def assignNode(self, node):
+        self.singleNode = node
+        self.mode = "single"
+        self.assigned = True
+        self.str = self.singleNode.name
+        self.str = translate(self.str, subForestVegForm_translation)
+        self.code = int(self.singleNode.codedValue)
+        self.convert()
+
+    def convert(self):
+        #This method CHECKS if a conversion (to altered node and result)
+        #and converts it.
+        #Works only for self.mode == "single".
+        sourceNode = self.singleNode
+        if (self.mode == "single") and (sourceNode.hasAlternative()):
+            alternativeNode_reflection = findNode(root, sourceNode.altCode)
+            #findNode might not find any node, and return an empty node.
+            #in case this happens - notify.
+            if alternativeNode_reflection.isEmpty():
+                txt = 'Could not find alternative node. Origin code: %s, Destination code: %s.' \
+                % (sourceNode.codedValue, sourceNode.altCode)
+                stepName = 'covtype'
+                self.standPolygon.notifier.add(stepName, 'warning', txt)
+            alt_name = alternativeNode_reflection.name
+            alt_codedValue = alternativeNode_reflection.codedValue
+            #set the singleNode to a NEW one: (not a reflection)
+            self.singleNode = Node(alt_name, alt_codedValue)
+            self.converted = True
+            self.str = self.singleNode.name
+            self.str = translate(self.str, subForestVegForm_translation)
+            self.code = self.singleNode.codedValue
+        return
+    """
+    def convert_old(self):
+        #This method CHECKS if a conversion (to altered node and result)
+        #and converts it.
+        #Works only for self.mode == "single".
+        source_codedValue = self.singleNode.codedValue
+        if (self.mode == "single") and (int(source_codedValue) in speciesConversions.keys()):
+            conv_dict = speciesConversions[int(source_codedValue)]
+            alt_name = conv_dict['alt_name']
+            alt_codedValue = conv_dict['alt_codedValue']
+            #set the singleNode to a new one:
+            self.singleNode = Node(alt_name, alt_codedValue)
+            self.converted = True
+            self.str = self.singleNode.name
+            self.code = int(self.singleNode.codedValue)
+            #self.sekerPoint.warnings.append("Species composition converted from %s to %s." % (source_codedValue, alt_codedValue))
+        return
+    """
+    def assignNodes(self, nodesList):
+        self.doubleNode = nodesList
+        self.mode = "double"
+        self.assigned = True
+        nodeNames = [n.name for n in self.doubleNode]
+        matrixResult = self.speciesComp_matrixObj.solve(nodeNames)
+        self.str = matrixResult
+        self.str = translate(self.str, subForestVegForm_translation)
+        #find the node of "מעורב ___ " by searching its name:
+        foundNode = findNodeByName(root, self.str)
+        if foundNode.isEmpty():
+            self.code = None
+        else:
+            self.code = foundNode.codedValue
+
+    def assignLayer(self, layer):
+        #deprecated.
+        #assign value based on a layer object.
+        self.mode = "layer"
+        self.assigned = True
+        self.str = layer.vegForm
+        self.str = translate(self.str, subForestVegForm_translation)
+    def assignLayers(self, layersList):
+        #assign value based on two layer objects.
+        self.mode = "layers"
+        self.code = None
+        self.assigned = True
+        layersVegForms = [l.vegForm for l in layersList]
+        matrixResult = self.vegForms_matrixObj.solve(layersVegForms)
+        self.str = matrixResult
+        self.str = translate(self.str, subForestVegForm_translation)
+    def assignBroadleaf(self, covtypeString):
+        #used when a SINGLE NODE was assigned and found to be 'מעורב רחבי-עלים'.
+        #hence, this method resets the actions of self.assignNode.
+        self.singleNode = Node()
+        self.mode = "broadLeaf"
+        self.assigned = True
+        #find the node by its translated name:
+        self.str = translate(covtypeString, subForestVegForm_translation)
+        foundNode = findNodeByName(root, self.str)
+        if foundNode.isEmpty():
+            self.code = None
+        else:
+            self.code = foundNode.codedValue
+
+    def assignSubForest(self, covtypeString):
+        self.mode = "subForest"
+        self.assigned = True
+        #find the node by its translated name:
+        self.str = translate(covtypeString, subForestVegForm_translation)
+        foundNode = findNodeByName(root, self.str)
+        if foundNode.isEmpty():
+            self.code = None
+        else:
+            self.code = foundNode.codedValue
+
+
+        
+
+    def __repr__(self):
+        return self.asText()
+    def asText(self):
+        return "name: %s. code: %s." % (self.str, self.code)
 
 class Node:
     def __init__(self, name = "", codedValue = "", altCode = ""):
@@ -2909,6 +3063,13 @@ class PoductPolygon(FcRow):
             values = layerResult.getValuesToWrite()
             self.writeSelf(fieldCodes, values)
 
+        self.v__covtype = self.c__covtype(
+            self.v__covtypeRel,
+            self.v__logiclayers
+        )
+        self.writeSelf(50038, self.v__covtype.code)
+        self.writeSelf(50039, self.v__covtype.str)
+
         self.v__forestagecomposition = self.c__forestagecomposition()
         self.writeSelf(50041, self.v__forestagecomposition)
 
@@ -3524,7 +3685,6 @@ class PoductPolygon(FcRow):
             }
             return outdict
 
-
     def c__totalcoverage(self):
         stepName = 'totalcoverage'
 
@@ -3811,12 +3971,12 @@ class PoductPolygon(FcRow):
             'names': ','.join([str(x) for x in names])
         }
         return outdict
-        
+    
     def c__naturalvalues(self):
         """
-        Removes None and "אין" values,
-        if other values exist → remove duplications → concatenate,
-        else: return "אין"
+        Each row value is a concat with ",",
+        remove unwanted values and duplications.
+        If "אין" coexists with other values - remove it.
         """
         stepName = 'naturalvalues'
 
@@ -3841,32 +4001,30 @@ class PoductPolygon(FcRow):
             'main': defaultValue,
             'details': None
         }
+        valuesToOmit = ["", " "]
 
         matrix = self.getMatrix_self(50075)
 
         # VALIDATION:
         validValues = []
         for polygonTup in matrix:
+            #rawValues is a list of row values (string),
+            #each string is a concatenation with ","s.
             rawValue = polygonTup[1]
-            if rawValue in domainValues:
-                validValues.append(rawValue)
-        
-        # convert to indexes:
-        indexList = [domainValues.index(rv) for rv in validValues]
-        # indexes to be removed:
-        for indexToRemove in [0, 1]:
-            while indexToRemove in indexList:
-                indexList.remove(indexToRemove)
+            if rawValue:
+                #rawValue of None/""/" " won't get here.
+                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
+                for splitValue in splitList:
+                    if splitValue in domainValues and splitValue not in valuesToOmit:
+                        validValues.append(splitValue)
         
         # LOGIC:
-        if indexList:
-            #sort by frequency, remove duplications.
-            indexList_sorted = freqSorted(indexList)
-            #convert indexes back to values:
-            valList = [domainValues[i] for i in indexList_sorted]
-            if elseValue in valList:
+        if validValues:
+            #sort by frequency, remove duplications
+            validValues_sorted = freqSorted(validValues)
+            if elseValue in validValues_sorted:
                 #1) move elseValue to end (if exists)
-                valList = makeLast(valList, elseValue)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
                 #2) copy free text from the details field
                 details_matrix = self.getMatrix_self(50103)
                 detailsList = [tup[1] for tup in details_matrix]
@@ -3878,10 +4036,10 @@ class PoductPolygon(FcRow):
                     # concatenate using "; "
                     resultsDict['details'] = '; '.join(detailsList)
             #remove default value if it exists along with other values
-            if (defaultValue in valList) and (len(valList)>1):
-                valList.remove(defaultValue)
+            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
+                validValues_sorted.remove(defaultValue)
             #concatenate:
-            resultsDict['main'] = ",".join(valList)
+            resultsDict['main'] = ",".join(validValues_sorted)
             return resultsDict
         else:
             #list is empty, return defaultValue
@@ -4098,7 +4256,6 @@ class PoductPolygon(FcRow):
             return resultCategory
         else:
             return defaultValue
-
 
     def c__presence(self, mode):
         """
@@ -4323,7 +4480,10 @@ class PoductPolygon(FcRow):
         Takes covtype species and proportions from source polygons'
         related tables, calculates each species' weighted value,
         and round the numbers to
-        Returns a list of tuples [(species, proportion), ...]
+        Returns a list of tuples = [
+            (codedValue <str>, proportion <int>),
+            ...
+        ]
         """
         stepName = 'covtypeRel'
         
@@ -4344,8 +4504,8 @@ class PoductPolygon(FcRow):
         matrix = self.getMatrix_related('st3', [53001,53002])
         generalDensity_matrix = self.getMatrix_self(50042)
 
+        #debug data:
         """
-        #@ debug data:
         matrix = [
             (
                 0.63,
@@ -4408,7 +4568,7 @@ class PoductPolygon(FcRow):
                 proportions.append(10*proportion/totalSum)
             percents_rounded = roundToNearestBase(proportions, 1)
             # remove zeros
-            resultsDict = [tuple([domTrees[i],str(percents_rounded[i])]) for i in range(len(domTrees)) if percents_rounded[i]!=0]
+            resultsDict = [tuple([domTrees[i],int(percents_rounded[i])]) for i in range(len(domTrees)) if percents_rounded[i]!=0]
             return resultsDict
         else:
             return []
@@ -4543,7 +4703,7 @@ class PoductPolygon(FcRow):
 
     def c__covtype_desc(self, covtypeList):
         """
-        Takes the output of c__covtype() method:
+        Takes the output of v__covtypeRel() method:
         - covtypeList: list of tuples [
             (codedValue <str>, proportion <int>), ...
             ].
@@ -4788,6 +4948,324 @@ class PoductPolygon(FcRow):
             layerRepr.finalize()
         
         return outDict
+
+    def c__covtype(self, covtypeList, logiclayersObj):
+        """
+        - covtypeList: list of tuples [
+            (codedValue <str>, proportion <int>), ...
+            ].
+        - logiclayersObj: output dict of c__logiclayers {
+            'primary': LayerResult,
+            'secondary': LayerResult
+            }
+        """
+        stepName = 'covtype'
+        
+        primaryLayer = logiclayersObj['primary']
+        secondaryLayer = logiclayersObj['secondary']
+        
+        #### Prepare hierarchical data structure: ####
+        root.resetValues()
+        
+        #debug:
+        """
+        covtypeList = [("3042", 5), ("3044", 5)]
+        """
+        #Set values of relevant nodes:
+        for codedValue,proportion in covtypeList:
+            root.findAndSet(codedValue, proportion)
+        iterableNodes = root.getNodesWithValue()
+        #create a result object for covtype:
+        resultObj = CovtypeResult(self, speciesCompositionCoordinator, forestVegFormCoordinator)
+
+        # LOGIC:
+        if not primaryLayer.isForestLayer:
+            """
+            Assigns the layer of subforest.
+            Notice: covtype can only be one of the following:
+            שיחייה, בתה, עשבוני, צומח גדות נחלים
+            and can not be:
+            יער נמוך (any of its options)
+            so, in case lrimary layer is יער נמוך the code will
+            inspect further for covtype - 
+            as it would do in c__logiclayers (part - 'Sub-forest inspection').
+            """
+            #check if layer's vegForm is יער נמוך:
+            lowForest_options = [
+                'יער מעורב נמוך',
+                'יער מחטני נמוך',
+                'יער רחבי עלים נמוך'
+            ]
+            isLowForest = primaryLayer.vegForm in lowForest_options
+
+            if isLowForest:
+                planttype = {k:v for k,v in self.v__planttype.items()}
+                if planttype['צומח_גדות_נחלים'] >= 30:
+                    covtype = 'צומח_גדות_נחלים'
+                else:
+                    planttype['שיחים'] += planttype['עצים'] + planttype['צומח_גדות_נחלים']
+                    planttype['עצים'] = 0
+                    planttype['צומח_גדות_נחלים'] = 0
+                    #The vegforms relevant for this step:
+                    vegForms = ['שיחים', 'בני_שיח', 'עשבוני']
+                    #vegForms_covers is a list of tuples: [(vegForm <str>, cover percent <int>), ...]
+                    #A tuple would be added only if cover percent >= 10 .
+                    vegForms_covers = [(vegform, planttype[vegform]) for vegform in vegForms if planttype[vegform] >= 10]
+                    if vegForms_covers:
+                        #pick the first tuple, for it's the highest hierarchy of vegForms:
+                        tup = vegForms_covers[0]
+                        covtype = tup[0]
+                    else:
+                        #No veg form of the three mentioned above has cover >= 10:
+                        #go to 'ללא כיסוי'.
+                        covtype = 'ללא_כיסוי'
+                
+                resultObj.assignSubForest(covtype)
+                return resultObj
+
+            else:
+                covtype = primaryLayer.vegForm
+                resultObj.assignSubForest(covtype)
+                #Check if code is None: that means it was not found in speciesHierarchy.json file.
+                #and then notify:
+                if (resultObj.str is not None) and (resultObj.code is None):
+                    txt = "Could not find species code of %s in JSON file." % resultObj.str
+                    self.notifier.add(stepName, 'warning', txt)
+                #return. that means the logic ends here.
+                return resultObj
+        
+        #check nodes' own value
+        for node in iterableNodes:
+            if node.value >= 8:
+                resultObj.assignNode(node)
+                #return. that means the logic ends here.
+                return resultObj
+
+        maxLvl = max([n.getLevel() for n in iterableNodes])
+        loopAgain = True
+
+        while loopAgain:
+            #inspect
+            for node in iterableNodes:
+                #notice I use .sumDown() and not .value.
+                if node.sumDown()>=8:
+                    resultObj.assignNode(node)
+                    #Notice I don't use return resultObj because
+                    #IT'S NOT THE END OF THE LOGIC.
+                    loopAgain = False
+                        
+            #go up a level only if a new loop will start later:
+            # 1)Node hasn't been chosen.
+            # 2)going up a level is allowed (when current maxLvl>1).
+            goingUpAllowed = maxLvl>1
+            if (not resultObj.assigned) and goingUpAllowed:
+                #go up one level before looping again:
+                loopAgain = True
+                for i, node in enumerate(iterableNodes):
+                    if node.getLevel() == maxLvl:
+                        #fold up:
+                        #1) add value to parent
+                        node.parent.value += node.value
+                        #2) remove value of node
+                        node.value = 0
+                #reset list:
+                iterableNodes = root.getNodesWithValue()
+                maxLvl = max([n.getLevel() for n in iterableNodes])
+            else:
+                loopAgain = False
+
+        if resultObj.assigned:
+            #check if it is "מעורב רחבי-עלים"
+            if resultObj.mode == 'single' and resultObj.singleNode.codedValue == '2900':
+                #Collect veg forms from stand's fields:
+                # tmira / high / mid forest veg form.
+                #notice the vegforms are taken from c__forestLayer__vegForm:
+                #if it runs before it - raise an ERROR:
+                if not self.forestlayerVegform_calculated:
+                    errorText = "Code running order error: forest layers' veg form must be calculated before covtype."
+                    arcpy.AddError(errorText)
+                
+                #take vegform from all forest layers (high, t, m), not only primary and secondary!
+                #takes the UNtranslated vegform
+                vegForms = set()
+                for layerNum in [4, 3, 2]:
+                    forestVegForm_raw = self.layerVegForm[layerNum]
+                    if hasattr(forestVegForm_raw,'split'):
+                        for vegform in forestVegForm_raw.split(','):
+                            vegForms.add(vegform)
+                    else:
+                        continue
+                """
+                #old code block - takes only from priary and secondary layer:
+                for layer in logiclayersObj.values():
+                    if layer.layerNum in forestLayer_vegForms_numsFields.keys():
+                        fieldcode = forestLayer_vegForms_numsFields[layer.layerNum]
+                        forestVegForm_raw = self.getSelfValue(fieldcode)
+                        for vegform in forestVegForm_raw.split(','):
+                            vegForms.add(vegform)
+                """
+                
+                #broadleafTypes is a list of possibilities sorted by order.
+                #the code would take the first of any of these options
+                #and return it.
+                broadleafTypes = [
+                    'יער_גדות_נחלים',
+                    'בוסתנים_ומטעים',
+                    'רחבי-עלים',
+                    'חורש',
+                ]
+                for broadleafType in broadleafTypes:
+                    if broadleafType in vegForms:
+                        #specific case: change the text
+                        if broadleafType == 'רחבי-עלים':
+                            broadleafType = 'מעורב רחבי-עלים'
+                        #return: code ends here:
+                        resultObj.assignBroadleaf(broadleafType)
+                        return resultObj
+                
+                #No item in broadleafTypes was found in vegForms.
+                #vegForms list is empty or none of broadleafTypes is in it:
+                #post a warning and return an errorish result.
+                broadleafText = 'שגיאה רחבי-עלים'
+                resultObj.assignBroadleaf(broadleafText)
+                warningText = 'Could not find broadleaf type among %s' \
+                % list(vegForms)
+                self.notifier.add(stepName, 'warning', warningText)
+                return resultObj
+            else:
+                return resultObj
+        else:
+            #resultObj hasn't been assigned yet (no node is >= 8).
+            #now iterableNodes holds only species "groups" (of highest lvl).
+            #logic of complementary graph:
+            for n in iterableNodes:
+                if n.sumDown() < 2:
+                    iterableNodes.remove(n)
+
+            #The purpose of this section is to check if 'מעורב רחבי-עלים' is
+            #one of the nodes, and if so, check if can be replaced, based on 
+            #the vegform RAW values of tmira, high, mid layers.
+            
+            #Check if "מעורב רחבי-עלים" is in iterableNodes:
+            if '2900' in [n.codedValue for n in iterableNodes]:
+                #Find this node's position in iterableNodes:
+                broadleaf_index = [n.codedValue for n in iterableNodes].index('2900')
+                #Collect veg forms from stand's fields:
+                # tmira / high / mid forest veg form.
+                #notice the vegforms are taken from c__forestLayer__vegForm:
+                #if it runs before it - raise an ERROR:
+                if not self.forestlayerVegform_calculated:
+                    errorText = "Code running order error: forest layers' veg form must be calculated before covtype."
+                    arcpy.AddError(errorText)
+                vegForms = set()
+                for layerNum in [4, 3, 2]:
+                    forestVegForm_raw = self.layerVegForm[layerNum]
+                    if hasattr(forestVegForm_raw,'split'):
+                        for vegform in forestVegForm_raw.split(','):
+                            vegForms.add(vegform)
+                    else:
+                        continue
+                
+                
+                #broadleafTypes is a list of possibilities sorted by order.
+                #the code would take the first of any of these options
+                #and replace 'מעורב רחבי-עלים' node with it.
+                broadleafTypes = [
+                    'יער_גדות_נחלים',
+                    'יער גדות נחלים',
+                    'בוסתנים_ומטעים',
+                    'בוסתנים ומטעים',
+                    'רחבי-עלים', #@REQUIRES ATTENTION
+                    'חורש',
+                ]
+                foundSubstitute = False
+                for broadleafType in broadleafTypes:
+                    if broadleafType in vegForms:
+                        foundSubstitute = True
+                        #specific case: change the text
+                        if broadleafType == 'רחבי-עלים':
+                            broadleafType = 'מעורב רחבי-עלים'
+                        #find the node by its name in root:
+                        substituteNode = Node()
+                        str = broadleafType
+                        str_translated = translate(str, subForestVegForm_translation)
+                        substituteNode = findNodeByName(root, str_translated)
+                        if not substituteNode.isEmpty():
+                            #Re-construct root tree based on the species in iterable nodes.
+                            #However, this time every iterableNode has its OWN value,
+                            #and not a sumDown of its children.
+                            #A list of tuples [(codedValue, proportion)]
+                            tupList = []
+                            for i, node in enumerate(iterableNodes):
+                                isSubstitute = i==broadleaf_index
+                                if isSubstitute:
+                                    #Combine the new coded value, and the previous sumDown().
+                                    codedValue = substituteNode.codedValue
+                                    proportion = node.sumDown()
+                                    tupList.append((codedValue, proportion))
+                                else:
+                                    codedValue = node.codedValue
+                                    proportion = node.sumDown()
+                                    tupList.append((codedValue, proportion))
+                            
+                            root.resetValues()
+                            for codedValue,proportion in tupList:
+                                root.findAndSet(codedValue, proportion)
+                            
+                            #re-construct iterableNodes list:
+                            iterableNodes = root.getNodesWithValue()
+                        else:
+                            txt = 'Could not locate %s in JSON file.' % str_translated
+                            self.notifier.add(stepName, 'warning', txt)
+
+                        #Substitution finished - stop this for-loop:
+                        break
+                if not foundSubstitute:
+                    #One of iterableNodes is 'מעורב רחבי עלים', and no substitute was
+                    #found in veg forms of tmira \ high \ mid layers.
+                    #add warning:
+                    txt = "Could not find substitute for '%s' in stand's veg forms of layers tmira \\ high \\ mid." % \
+                    iterableNodes[broadleaf_index].name
+                    #suspend warning: (development section #5)
+                    #self.notifier.add(stepName, 'warning', txt)
+
+            if len(iterableNodes) == 1:
+                resultObj.assignNode(iterableNodes[0])
+                return resultObj
+            elif len(iterableNodes) == 2:
+                resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
+                return resultObj
+            elif len(iterableNodes) > 2:
+                #That means~~ len(iterableNodes) > 2
+                #sort descending by sumDown():
+                iterableNodes.sort(key=lambda x: x.sumDown(), reverse=True)
+                if iterableNodes[1].sumDown() > iterableNodes[2].sumDown():
+                    #Second species group > third:
+                    resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
+                    return resultObj
+                else:
+                    #Second == third
+                    if iterableNodes[0].sumDown() > iterableNodes[1].sumDown():
+                        #First > second (and third)
+                        if '1000' in [n.codedValue for n in iterableNodes[1:]]:
+                            #בקבוצות הקטנות (לא הראשונה) יש מחטני
+                            mahtaniNode_index = [n.codedValue for n in iterableNodes].index('1000')
+                            mahtaniNode = iterableNodes[mahtaniNode_index]
+                            resultObj.assignNodes([iterableNodes[0], mahtaniNode])
+                            return resultObj
+                        else:
+                            #בקבוצות הקטנות (לא הראשונה) אין מחטני
+                            resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
+                            return resultObj
+                    else:
+                        #First == second == third
+                        resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
+                        return resultObj
+        
+        #In case an unpredicted situation happened, return a default result obj and warn.
+        self.warnings.append("Could not determine species composition.")
+        resultObj.str = "Could not determine."
+        return resultObj
 
     def c__forestagecomposition(self):
         """
