@@ -3,20 +3,8 @@ import os
 import sys
 from pathlib import Path
 import pandas as pd
-
-ROOT = str(Path(__file__).parents[1].absolute())
-sys.path.append(str(ROOT))
-
-import enums as pyt_reload_enums
-
-[
-    print(f"Reloaded {reload(module).__name__}")
-    for module_name, module in globals().items()
-    if module_name.startswith("pyt_reload")
-]
-
-import enums.domains as domains
-from enums.excel_values import ExcelColumns
+import domains
+import excel_values
 
 def load_excel_data(excel_path, sheet_name):
     return pd.read_excel(excel_path, sheet_name=sheet_name)
@@ -71,11 +59,11 @@ def create_field(gdb_path, layer_name, field_name, field_alias, field_type, doma
 def add_fields_to_layer_from_excel(layer_df, layer_name, gdb_path):
 
     for _, row in layer_df.iterrows():
-        field_name = row[ExcelColumns.NAME.value]
-        field_alias = row[ExcelColumns.ALIAS.value]
-        field_type = row[ExcelColumns.TYPE.value]
-        domain_name = row[ExcelColumns.DOMAIN.value]
-        default_value = row[ExcelColumns.DEFAULT_VALUE.value]
+        field_name = row[excel_values.ExcelColumns.NAME.value]
+        field_alias = row[excel_values.ExcelColumns.ALIAS.value]
+        field_type = row[excel_values.ExcelColumns.TYPE.value]
+        domain_name = row[excel_values.ExcelColumns.DOMAIN.value]
+        default_value = row[excel_values.ExcelColumns.DEFAULT_VALUE.value]
 
         create_field(gdb_path, layer_name, field_name, field_alias, field_type, domain_name, default_value)
 
@@ -83,22 +71,22 @@ def verify_required_fields(layer_path, layer_df):
     layer_fields = get_layer_fields(layer_path)
 
     common_error_df = layer_df[
-    layer_df[ExcelColumns.COMMON_ERROR.value].notna() &
-    layer_df[ExcelColumns.EXISTS.value].notna()
+    layer_df[excel_values.ExcelColumns.COMMON_ERROR.value].notna() &
+    layer_df[excel_values.ExcelColumns.EXISTS.value].notna()
 ]
 
     # Handle common errors and rename fields
     for _, row in common_error_df.iterrows():
-        if row[ExcelColumns.COMMON_ERROR.value] in layer_fields and row[ExcelColumns.NAME.value] not in layer_fields:
+        if row[excel_values.ExcelColumns.COMMON_ERROR.value] in layer_fields and row[excel_values.ExcelColumns.NAME.value] not in layer_fields:
             arcpy.management.AlterField(
                 in_table=layer_path,
-                field=row[ExcelColumns.COMMON_ERROR.value],
-                new_field_name=row[ExcelColumns.NAME.value],
-                new_field_alias=row[ExcelColumns.ALIAS.value]
+                field=row[excel_values.ExcelColumns.COMMON_ERROR.value],
+                new_field_name=row[excel_values.ExcelColumns.NAME.value],
+                new_field_alias=row[excel_values.ExcelColumns.ALIAS.value]
             )
 
     layer_fields = get_layer_fields(layer_path)
-    exists_layer_df = layer_df[layer_df[ExcelColumns.EXISTS.value].notna()][ExcelColumns.NAME.value].tolist()
+    exists_layer_df = layer_df[layer_df[excel_values.ExcelColumns.EXISTS.value].notna()][excel_values.ExcelColumns.NAME.value].tolist()
 
     missing_fields = [field for field in exists_layer_df if field not in layer_fields]
 
@@ -112,7 +100,7 @@ def verify_required_fields(layer_path, layer_df):
 def remove_extra_fields_from_layer(layer_df, layer_path):
 
     layer_fields = [field.name for field in arcpy.ListFields(layer_path) if not field.required]
-    fields_to_delete = [field for field in layer_fields if field not in layer_df[ExcelColumns.NAME.value].values]
+    fields_to_delete = [field for field in layer_fields if field not in layer_df[excel_values.ExcelColumns.NAME.value].values]
 
     if fields_to_delete:
         arcpy.DeleteField_management(layer_path, fields_to_delete)
