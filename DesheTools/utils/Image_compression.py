@@ -4,11 +4,11 @@ from PIL import Image
 import shutil
 
 # Settings
-gdb_path = r"C:\Path\To\Your\Data.gdb"
-attachment_table = "Points_ATTACH"  # Name of the attachment table
+gdb_path = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\smy4129.gdb"
+attachment_table = "samples__ATTACH"
 output_folder = r"C:\Temp\Exported_Images"
 compressed_folder = r"C:\Temp\Compressed_Images"
-feature_class = "Points"  # Name of the point feature class associated with the attachments
+feature_class = "samples"
 
 # Create folders
 os.makedirs(output_folder, exist_ok=True)
@@ -42,17 +42,17 @@ for rel_guid, original_path in export_log:
             img = img.convert("RGB")
             img.save(compressed_path, "JPEG", quality=70, optimize=True)
         compressed_log.append((rel_guid, compressed_path))
-    except Exception as e:
-        print(f"Error in file {filename}: {e}")
+    except (OSError, IOError) as e:
+        print(f"Skipping file {filename} (not an image): {e}")
 
-# Step 3: Delete existing attachments (optional if working on a copy)
+# Step 3: Delete existing attachments
 print("Deleting existing attachments...")
-arcpy.DeleteAttachments_management(os.path.join(gdb_path, feature_class), "GLOBALID",
-                                   os.path.join(gdb_path, attachment_table), "REL_GLOBALID")
+with arcpy.da.UpdateCursor(attachment_table_path, ["ATTACHMENTID"]) as cursor:
+    for row in cursor:
+        cursor.deleteRow()
 
 # Step 4: Import compressed attachments
 print("Importing compressed attachments...")
-# Create a temporary mapping table to link files
 temp_table = os.path.join("in_memory", "attach_table")
 arcpy.CreateTable_management("in_memory", "attach_table")
 arcpy.AddField_management(temp_table, "REL_GLOBALID", "GUID")
@@ -64,7 +64,6 @@ with arcpy.da.InsertCursor(temp_table, ["REL_GLOBALID", "ATT_NAME", "FILE_PATH"]
         filename = os.path.basename(path)
         cursor.insertRow((rel_guid, filename, path))
 
-# Add the attachments back
 arcpy.AddAttachments_management(
     os.path.join(gdb_path, feature_class),
     "GLOBALID",
