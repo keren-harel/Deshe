@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שישי 20 דצמבר 2024 15:40:23</msg><msg code="-2147467259" type="100">  File "D:\GIS_deshe\test_tools\smy2kkl2\smy2kkl2\Scripts\‏‏smy2kkl_param.py", line 120
+    arcpy.AddMessage(f' AFTER:\n {tab_df.columns}'))
+                                                   ^
+SyntaxError: unmatched ')'
+</msg><msg code="0" type="0">Failed script 2. Convert To KKL Standard...</msg><msg code="-2147467259" type="100">Failed to execute (ConvertToKKLStandard).</msg><msg code="0" type="3">Failed at יום שישי 20 דצמבר 2024 15:40:23 (Elapsed Time: 0.05 seconds)</msg></messages>

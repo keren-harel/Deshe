@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שני 25 דצמבר 2023 14:04:57</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\smy_verification_param.py", line 316
+    if (value != None) and (isinstance(value, str)) and (value (not value.isdigit() ):
+                                                                                     ^
+SyntaxError: invalid syntax
+</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום שני 25 דצמבר 2023 14:04:57 (Elapsed Time: 0.06 seconds)</msg></messages>

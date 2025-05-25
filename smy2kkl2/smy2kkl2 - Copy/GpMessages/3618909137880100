@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שישי 29 דצמבר 2023 12:29:10</msg><msg code="0" type="0">samples records added to SMY_Samples</msg><msg code="1" type="100">Failed to execute. Parameters are not valid.
+ERROR 000732: Target Dataset: Dataset C:\MDGISS\devs\smy2kkl\kkl-db1_giscentral_kkl1.sde\SDE.SMY_Stands does not exist or is not supported
+Failed to execute (Append).
+</msg><msg code="1" type="100">&lt;class 'arcgisscripting.ExecuteError'&gt; smyAppend2SDE_param.py 87</msg><msg code="0" type="0">Failed script 3. Append SMY to SDE...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום שישי 29 דצמבר 2023 12:30:59 (Elapsed Time: 1 minutes 49 seconds)</msg></messages>
