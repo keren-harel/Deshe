@@ -3881,6 +3881,7 @@ class StandPolygon(FcRow):
             "מוקד בינוני",
             "מוקד גדול",
         ]
+        defaultValue = epicenterType_sorted[1]
         tupList = [(k,v) for k,v in invasivespeciesDict.items()]
         #Sort by the index of the epicenterType (magnitude):
         tupList.sort(key=lambda x: epicenterType_sorted.index(x[1]), reverse = True)
@@ -3890,14 +3891,16 @@ class StandPolygon(FcRow):
         for tup in tupList:
             invasiveSpecies = tup[0]
             epicenterType = tup[1]
-            txt = "%s - %s" % (invasiveSpecies, epicenterType)
-            strList.append(txt)
+            if epicenterType not in epicenterType_sorted[:2]:
+                # epicenterType is not None or 'אין'
+                txt = "%s - %s" % (invasiveSpecies, epicenterType)
+                strList.append(txt)
         
         if strList:
             concat = ", ".join(strList)
             return concat
         else:
-            return None
+            return defaultValue
 
     def c__naturalvalues(self):
         """

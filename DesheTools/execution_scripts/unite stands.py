@@ -3113,7 +3113,7 @@ class PoductPolygon(FcRow):
         self.writeSelf(50089, self.v__groundlevelfloorvegform)
         
         self.v__pointvarianceindex = self.c__pointvarianceindex()
-        self.writeSelf(50087, self.v__groundlevelfloorvegform)
+        self.writeSelf(50087, self.v__pointvarianceindex)
 
         return
 
@@ -3146,6 +3146,7 @@ class PoductPolygon(FcRow):
             "61-100",
             "מעל  100"
         ]
+        defaultValue = domainValues[0]
 
         matrix = self.getMatrix_self(fieldCode)
 
@@ -3157,9 +3158,8 @@ class PoductPolygon(FcRow):
         for inputValue in inputValues:
             if inputValue in exceptionValues:
                 # value is from [null, "לא רלוונטי", "אין עצים"]
-                txt = "invalid input value: %s" % inputValue
-                self.notifier.add(stepName, 'warning', txt)
-                return inputValue
+                # return defaultValue.
+                return defaultValue
             elif inputValue not in domainValues:
                 # value is entirely not from domain AND is not None.
                 # notify and return None
@@ -3366,21 +3366,25 @@ class PoductPolygon(FcRow):
 
         sameVegform = splitted_vegform_0 == splitted_vegform_1
         vegForm_pool = removeDup(splitted_vegform_0 + splitted_vegform_1)
+        vegForm_lengths = [len(splitted_vegform_0), len(splitted_vegform_1)]
         if sameVegform or self.areaDominance:
             # same veg form or forms, including len() == 1
             # - or -
             # area of stand 1 > 80%
             return ','.join(splitted_vegform_0)
-        elif len(vegForm_pool) == 2:
-            # check if has a mixed (מעורב) veg form.
-            # a list of booleans
-            isMixed = ['מעורב' in value for value in vegForm_pool]
-            if True in isMixed:
-                mixedIndex = vegForm_pool.index(True)
-                return vegForm_pool[mixedIndex]
+        elif vegForm_lengths == [1, 1]:
+            # both stands have a single vegForm,
+            # return the common veg form.
+            return splitted_vegform_0[0]
+        elif 1 in vegForm_lengths and 2 in vegForm_lengths and len(vegForm_pool) == 2:
+            # one stand has single vegForm, the other has two,
+            # and they share one vegForm.
+            # return the common veg form.
+            if len(splitted_vegform_0) == 1:
+                return splitted_vegform_0[0]
             else:
-                return ','.join(vegForm_pool)
-        else:
+                return splitted_vegform_1[0]
+        elif len(vegForm_pool) > 0:
             # len () > 2
             # check if any of the the next list is in the pool:
             for vegForm in priorityVegForms_1:
@@ -3395,6 +3399,8 @@ class PoductPolygon(FcRow):
                     return vegForm
             else:
                 return None
+        else:
+            return None
 
     def c__forestLayer__layerCover(self, layerNum):
         """
@@ -4461,7 +4467,7 @@ class PoductPolygon(FcRow):
             plantTypeDict[plantType] = roundedValue
         # 
         percentSum = sum(plantTypeDict.values())
-        if percentSum < 100:
+        if percentSum < 100 and percentSum != 0:
             # modify to make sum == 100, while preserving ratios
             ratio = 100/percentSum
             plantTypeDict = {pType: percent*ratio for pType, percent in plantTypeDict.items()}
@@ -4773,6 +4779,7 @@ class PoductPolygon(FcRow):
             "מוקד בינוני",
             "מוקד גדול",
         ]
+        defaultValue = epicenterType_sorted[1]
         tupList = [(k,v) for k,v in invasivespeciesDict.items()]
         #Sort by the index of the epicenterType (magnitude):
         tupList.sort(key=lambda x: epicenterType_sorted.index(x[1]), reverse = True)
@@ -4782,14 +4789,16 @@ class PoductPolygon(FcRow):
         for tup in tupList:
             invasiveSpecies = tup[0]
             epicenterType = tup[1]
-            txt = "%s - %s" % (invasiveSpecies, epicenterType)
-            strList.append(txt)
+            if epicenterType not in epicenterType_sorted[:2]:
+                # epicenterType is not None or 'אין'
+                txt = "%s - %s" % (invasiveSpecies, epicenterType)
+                strList.append(txt)
         
         if strList:
             concat = ", ".join(strList)
             return concat
         else:
-            return None
+            return defaultValue
 
     def c__vitalforest_desc(self, vitalForestDict):
         """
