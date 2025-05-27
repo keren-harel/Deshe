@@ -10,9 +10,9 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.5.2025\smy_Turan2024_BKP_25082024.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
-    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני__Project')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\27.5.2025\smy_Lahav_BKP_241224.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_41282_fnl')
+    input_unitelines = os.path.join(input_workspace, 'Suggestions_AfterSur_Project')
     #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -2497,7 +2497,11 @@ class UniteLine(FcRow):
         """
         stands = []
         uniteLine_shape = self.getSelfValue(60001)
-        unitePoints = [uniteLine_shape.firstPoint, uniteLine_shape.lastPoint]
+        try:
+            unitePoints = [uniteLine_shape.firstPoint, uniteLine_shape.lastPoint]
+        except:
+            # unable to get first and last points of the line.
+            return stands
         unitePoints_shapes = [arcpy.PointGeometry(p, uniteLine_shape.spatialReference) for p in unitePoints]
         
         stands_sc = arcpy.SearchCursor(standsFC.fullPath)
@@ -5795,7 +5799,7 @@ calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.name,
-    #where_clause = 'OBJECTID IN (67, 168, 331, 369, 268)', #for debug!!!
+    #where_clause = 'OBJECTID > 130', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
