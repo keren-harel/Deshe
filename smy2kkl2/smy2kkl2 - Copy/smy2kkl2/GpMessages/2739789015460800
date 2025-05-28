@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שלישי 19 דצמבר 2023 08:17:12</msg><msg code="1" type="100">Failed to execute. Parameters are not valid.
+ERROR 000732: Input Features: Dataset C:\MDGISS\devs\smy2kkl\kkl-db1_giscentral_kkl1.sde\SDE.SMY_Samples does not exist or is not supported
+Failed to execute (MakeFeatureLayer).
+</msg><msg code="1" type="100">&lt;class 'arcgisscripting.ExecuteError'&gt; smyAppend2SDE_param.py 65</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום שלישי 19 דצמבר 2023 08:17:12 (Elapsed Time: 0.20 seconds)</msg></messages>

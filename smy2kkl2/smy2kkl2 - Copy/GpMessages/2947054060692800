@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 21 דצמבר 2023 17:51:36</msg><msg code="0" type="0">#########################################################</msg><msg code="0" type="0"># CMY Data converting process for forest number 1311</msg><msg code="0" type="0">#########################################################</msg><msg code="0" type="0">file geodatabase smy1311.gdb created</msg><msg code="0" type="0">All data copied to smy1311.gdb</msg><msg code="0" type="0">0 FOR_NO IS NULL</msg><msg code="0" type="0">&gt;&gt;&gt; Converting data in a Samples layer...</msg><msg code="0" type="0">   OID@  ...                                           Comments
+0    69  ...                  זיתים- לא ברור האם מתוחזקים או לא
+1    71  ...  חלק המזרחי יש עבודות הסדרת הנחל ואתר של מחצבה ...
+2   110  ...                                               None
+
+[3 rows x 73 columns]</msg><msg code="0" type="3">Succeeded at יום חמישי 21 דצמבר 2023 17:52:11 (Elapsed Time: 34.73 seconds)</msg></messages>

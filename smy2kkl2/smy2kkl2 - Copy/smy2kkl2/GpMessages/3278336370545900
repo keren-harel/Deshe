@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שני 25 דצמבר 2023 13:52:58</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\smy_verification_param.py", line 276
+    tn_df = data_df[data_df[('ConvertType'] == 'TN') &amp; (tn_df['Table Name'] == tab_name)][['Field Source']]
+                                          ^
+SyntaxError: closing parenthesis ']' does not match opening parenthesis '('
+</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום שני 25 דצמבר 2023 13:52:58 (Elapsed Time: 0.06 seconds)</msg></messages>
