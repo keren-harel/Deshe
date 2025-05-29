@@ -19,3 +19,15 @@ class Notes(Enum):
     PRE_MAPPING_SUGGESTION_APPROVED = "הצעה מקדם מיפוי – התקבלה"
     PRE_MAPPING_SUGGESTION_REJECTED = "הצעה מקדם מיפוי – נדחתה"
     SECOND_DISCUSSION_SUGGESTION = "הצעה מהכנה לדיון שני"
+
+class Accept(Enum):
+    APPROVE = "לקבל"
+    REJECT = "לא לקבל"
+    QUESTION_MARK = "?"
+    BEFORE_TESTING = "לפני בדיקה"
+
+class Source(Enum):
+    FIELD_SUGGESTION = "הצעה מהשטח"
+    PRE_MAPPING_SUGGESTION_APPROVED = "הצעה מקדם מיפוי – התקבלה"
+    PRE_MAPPING_SUGGESTION_REJECTED = "הצעה מקדם מיפוי – נדחתה"
+    NEW_SUGGESTION = "הצעה חדשה"

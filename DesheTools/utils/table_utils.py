@@ -24,9 +24,12 @@ def add_domain_if_needed(gdb_path, layer_path, field_name, domain_name):
     if domain_name not in existing_domains:
         arcpy.CreateDomain_management(gdb_path, domain_name, field_type="TEXT")
 
-    domain_dict = {e.value: e.name for e in getattr(domains, domain_name)}
-    for code, name in domain_dict.items():
-        arcpy.AddCodedValueToDomain_management(gdb_path, domain_name, name, code)
+        domain_dict = {e.value: e.name for e in getattr(domains, domain_name)}
+        for code, name in domain_dict.items():
+            arcpy.AddCodedValueToDomain_management(gdb_path, domain_name, name, code)
+
+    else:
+       arcpy.AddWarning(f"Error: The domain {domain_name} already exists. If the domain is incorrect, please delete the existing domain and re-run the tool.")
 
     arcpy.AssignDomainToField_management(layer_path, field_name, domain_name)
 
