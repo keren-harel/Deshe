@@ -10,9 +10,7 @@ def add_to_root(folders):
     if DESHE_TOOLS_FOLDER_PATH not in sys.path:
         sys.path.insert(0, DESHE_TOOLS_FOLDER_PATH)
     for folder in folders:
-        arcpy.AddMessage(f"start! {folder}")
         if rf"{DESHE_TOOLS_FOLDER_PATH}\{folder}" not in sys.path:
-            arcpy.AddMessage(f"here! {folder}")
             sys.path.insert(1, rf"{DESHE_TOOLS_FOLDER_PATH}\{folder}")
 
 
