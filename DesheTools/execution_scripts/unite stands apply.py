@@ -10,12 +10,12 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi.gdb'
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi_1.gdb'
     input_stands = os.path.join(input_workspace, 'stands_3233_fnl')
     input_unitelines = os.path.join(input_workspace, 'unite_L')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_Tzora')
     #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
-    input_beitGidul = "ים-תיכוני"
 else:
     input_stands = arcpy.GetParameter(0)
     #Take all the features, even if layar has selection.
@@ -25,27 +25,21 @@ else:
     #Take all the features, even if layar has selection.
     input_unitelines = arcpy.Describe(input_unitelines).catalogPath
 
-    input_configurationFolder = arcpy.GetParameterAsText(2)
-    #input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
+    input_sekerpoints = arcpy.GetParameter(2)
+    #Take all the features, even if layar has selection.
+    input_sekerpoints = arcpy.Describe(input_sekerpoints).catalogPath
 
-    input_beitGidul = arcpy.GetParameterAsText(3)
+    input_configurationFolder = arcpy.GetParameterAsText(3)
+    #input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 
 
 #VARIABLES
 fieldsExcel = os.path.join(input_configurationFolder, 'fields.xlsx')
 fieldsExcel_sheet = 'unite stands'
-forestVegFormExcel = os.path.join(input_configurationFolder, 'ForestVegForm.xlsx')
-standVegFormExcel = os.path.join(input_configurationFolder, 'StandVegForm.xlsx')
-speciesCompositionExcel = os.path.join(input_configurationFolder, 'species composition.xlsx')
-relativeDensityKeyExcel = os.path.join(input_configurationFolder, 'relativeDensityKey.xlsx')
-totalCoverageExcel = os.path.join(input_configurationFolder, 'TotalCoverage.xlsx')
 #GDB that contains all the domains needed.
 origin_GDB = os.path.join(input_configurationFolder, 'origin.gdb')
 origin_GDB_domains = arcpy.Describe(origin_GDB).domains
 #Import JSON file
-speciesHierarchy_path = os.path.join(input_configurationFolder, 'speciesHierarchy.json')
-with open(speciesHierarchy_path, encoding='utf-8') as f:
-    speciesHierarchy_jsonObject = json.load(f)
 
 unitelines_stands_relationship = {
     'nickname': 'ls',
@@ -61,102 +55,19 @@ stands_tables_relationships = {
     'st3': ("_".join([os.path.basename(input_stands)]*2) + '_StartRepeatDominTree', 53),
     'st4': ("_".join([os.path.basename(input_stands)]*2) + '_VitalForest', 54),
 }
-
-beitgidulList = [
-    "ים-תיכוני",
-    "ים-תיכוני יבש",
-    "צחיח-למחצה"
-]
+sekerpoints_tables_relationships = {
+    #'nickname': ('name of relationship class', field codes prefix <int>),
+    'pt1': (os.path.basename(input_sekerpoints) + '_InvasiveSpecies', 41),
+    'pt2': (os.path.basename(input_sekerpoints) + '_PlantTypeCoverDistribut', 42),
+    'pt3': (os.path.basename(input_sekerpoints) + '_StartRepeatDominTree', 43),
+    'pt4': (os.path.basename(input_sekerpoints) + '_VitalForest', 44),
+}
 
 #Fields to be added to each related table
 #the first one is ALWAYS used for linkage in relationship class!
 #the order of the other codes matters as well.
 #[stand_ID, standAddress, FOR_NO, HELKA, STAND_NO]
 stands_relatedTables_globalFieldCodes = [59001,59002,59003,59004,59005]
-
-layerCover_table1 = {
-            #value <str>: (ordered num <int>, ceil of avg <int>, max <int>),
-            "אין": (0, 0, 0),
-            "זניח (3%-0%)": (1, 2, 3),
-            "פזור (10%-3%)": (2, 7, 10),
-            "פתוח (33%-10%)": (3, 22, 33),
-            "בינוני (66%-33%)": (4, 50, 66),
-            "גבוה (מעל 66%)": (5, 88, 100),
-        }
-layerCover_table1_backwardsList = [(v[2],k) for k,v in layerCover_table1.items()]
-
-subForestVegForm_translation = {
-    #based on instructions from February 2023.
-    "שיחים": "שיחייה",
-    "בני_שיח": "בתה",
-    "בני שיח": "בתה",
-    "צומח_גדות_נחלים": "צומח גדות נחלים",
-    "בוסתנים_ומטעים": "בוסתנים ומטעים",
-    "שיטים_פולשני": "שיטים פולשני",
-    "יער_גדות_נחלים": "יער גדות נחלים",
-    "ללא_כיסוי": "ללא כיסוי",
-}
-
-layerToShortText = {
-    4: "tmira",
-    3: "high",
-    2: "mid",
-    1: "sub"
-}
-
-layerToLongText = {
-    4: "תמירה",
-    3: "גבוהה",
-    2: "בינונית",
-    1: "קומת קרקע"
-}
-
-layerToLongText_m = {
-    #Hebrew male form.
-    4: "תמיר",
-    3: "גבוה",
-    2: "בינוני",
-    1: "קומת קרקע"
-}
-
-subCoverType_domain = [
-    #This domain is in descending order.
-    #YOU CAN CHANGE THE TEXTS BUT DO-NOT CHANGE THE ORDER, OMIT OR ADD.
-    #(for example: 'עצים' will keep its index and logic functionality.)
-    "שיחים",
-    "בני_שיח",
-    "עשבוני",
-    "עצים",
-    "ללא_כיסוי",
-]
-
-presenceConifer_threshold = {
-    "נטיעה": 4,
-    "התחדשות_טבעית": 5
-}
-presenceConifer_domain = [
-    "",
-    None,
-    "אין",
-    "1-20",
-    "21-50",
-    "51-100",
-    "מעל 100"
-]
-
-presenceBroadleaf_threshold = {
-    "נטיעה": 4,
-    "התחדשות_טבעית": 6
-}
-presenceBroadleaf_domain = [
-    "",
-    None,
-    "אין",
-    "1-5",
-    "6-10",
-    "11-20",
-    "מעל 20"
-]
 
 #FUNCTIONS
 def importDomain(domainName, sourceGDB, destinationGDB):
@@ -788,14 +699,16 @@ class FeatureClass:
 
 class Organizer:
     #An object that holds data models.
-    def __init__(self, stands, unitelines, standsRelationships):
+    def __init__(self, stands, unitelines, sekerpoints, standsRelationships, sekerpointsRelationships):
         self.stands = FeatureClass(stands)
         self.unitelines = FeatureClass(unitelines)
+        self.sekerpoints = FeatureClass(sekerpoints)
         #Coordinate system of both FCs must be the same.
-        self.checkSR([self.stands, self.unitelines])
+        self.checkSR([self.stands, self.unitelines, self.sekerpoints])
         if self.stands.workspace != self.unitelines.workspace:
             arcpy.AddError('Stands and seker points are not in the same workspace.')
         arcpy.env.workspace = self.stands.workspace
+        
         self.relationships = {
             #'nickname': RelationshipClass,
         }
@@ -810,6 +723,25 @@ class Organizer:
             #a patch to relationship's destination FC:
             #was made for verification of field existance.
             self.relationships[nickname].destination.fieldCodesPrefix = fieldCodesPrefix
+        
+        #Create and bind RelationshipClasses existing relationships between sekerpoints
+        #and its related TABLES.
+        for nickname, relTup in sekerpointsRelationships.items():
+            #relTup = ('name of relationship class', field codes prefix <int>)
+            relName = relTup[0]
+            fieldCodesPrefix = relTup[1]
+            #relationships <dict>: 'nickname': 'name of relationship class'.
+            self.relationships[nickname] = RelationshipClass(relName, nickname, self.sekerpoints)
+            #a patch to relationship's destination FC:
+            #was made for verification of field existance.
+            self.relationships[nickname].destination.fieldCodesPrefix = fieldCodesPrefix
+
+        #Create and bind RelationshipClasses existing relationships between stand
+        #and its related UNITELINES.
+        relName = unitelines_stands_relationship['name']
+        nickname = unitelines_stands_relationship['nickname']
+        self.relationships[nickname] = RelationshipClass(relName, nickname, self.unitelines)
+
         #Create and bind RelationshipClasses existing relationships between stand
         #and its related POINTS.
         #Find the relationship between current stands and points:
@@ -817,9 +749,12 @@ class Organizer:
         relName = relDesc.name
         nickname = 'sp'
         self.relationships[nickname] = RelationshipClass(relName, nickname, self.stands)
+
+        #References of corresponding organizer objects:
+        #to be populated later.
+        self.buckupOrganizer = None
+        self.buckupOfOrganizer = None
         
-
-
     def checkSR(self, FC_list):
         wkid_list = [fc.desc.spatialReference.factoryCode for fc in FC_list]
         wkid_woDup = removeDup(wkid_list)
@@ -851,9 +786,69 @@ class Organizer:
         self.__exit() # this method is non-existent, meant to crash.
         return None
 
-
     def __repr__(self):
         return 'Organizer object'
+
+    def initBuckupDatabase(self):
+        """
+        Identifies a buckup database based on the suffix added to the current database.
+        """
+        buckupDatabase_suffix = '_buckup'
+        #Get the current database:
+        currentDatabase = self.stands.workspace
+        #Get buckup database path:
+        buckupDatabase = currentDatabase.replace('.gdb', buckupDatabase_suffix + '.gdb')
+        buckupDatabase_basename = os.path.basename(buckupDatabase)
+        #Check if the buckup database exists:
+        if not arcpy.Exists(buckupDatabase):
+            buckupDatabase_existed = False
+            #Create the buckup database from the current database scheme:
+            arcpy.AddMessage('Creating a buckup database: %s' % buckupDatabase_basename)
+            folderPath = os.path.dirname(currentDatabase)
+            arcpy.management.CreateFileGDB(folderPath, buckupDatabase_basename)
+            # create a scheme file
+            schemeFile = os.path.join(folderPath, 'scheme.xml')
+            arcpy.management.ExportXMLWorkspaceDocument(
+                currentDatabase,
+                schemeFile,
+                export_type="SCHEMA_ONLY"
+            )
+            # import the scheme file to the buckup database
+            arcpy.management.ImportXMLWorkspaceDocument(
+                buckupDatabase,
+                schemeFile,
+                import_type="SCHEMA_ONLY",
+            )
+            arcpy.management.Delete(schemeFile)
+        else:
+            buckupDatabase_existed = True
+            arcpy.AddMessage('Existing buckup database identified: %s' % buckupDatabase_basename)
+            #@PATCH_TEMPORARY_7.25 - did not validate the existing buckup database scheme
+
+        return buckupDatabase
+
+    def replicate(self):
+        """
+        Creates a new Organizer object that is a replica of the current one,
+        but with paths modified to point to the buckup database.
+        * "bu" = backup.
+        """
+        # Modify paths to point to the buckup database:
+        bu_input_stands = self.stands.fullPath.replace('.gdb', '_buckup.gdb')
+        bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_buckup.gdb')
+        bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_buckup.gdb')
+
+        newOrg = Organizer(
+            bu_input_stands,
+            bu_input_unitelines,
+            bu_input_sekerpoints,
+            stands_tables_relationships, 
+            sekerpoints_tables_relationships
+        )
+        # Create references between organizers:
+        self.buckupOrganizer = newOrg
+        newOrg.buckupOfOrganizer = self
+        return newOrg
 
 class RelationshipClass:
     def __init__(self, relationshipName, nickname, originFC):
@@ -2454,45 +2449,114 @@ class UniteLine(FcRow):
     #Each unite line in unitelines gets an object.
     def __init__(self, row, unitelinesFC):
         FcRow.__init__(self, row, unitelinesFC)
-        arcpy.AddMessage('Started calculating: uniteLine %s = %s'% (self.FC.oidFieldName, self.id))
-        self.notifier = Notifier(self, 60005)
+        arcpy.AddMessage('Started handling: uniteLine %s = %s'% (self.FC.oidFieldName, self.id))
+        #@PATCH_TEMPORARY_7.25 - disable notifications
+        #self.notifier = Notifier(self, 60005)
 
-        self.stands = self.getStands(org.stands)
-        self.joint_isValid = self.validateJoint() 
+        self.joint_isValid = self.getSelfValue(60003) == 'תקין' and self.getSelfValue(60002)
 
         if self.joint_isValid:
-            # write joint status:
-            self.writeSelf(60003, 'תקין')
-            # sort stands: larger area first.
-            self.stands.sort(key=lambda x: x.area, reverse = True)
-            # write default conclusion (0 - ממתין להחלטה)
-            self.writeSelf(60006, 0)
-            # write the globalID of origin stands:
-            self.writeSelf([60007, 60008], [self.stands[0].globalID, self.stands[1].globalID])
-            
-            # Write a new empty row in stands
-            prod_ic = arcpy.da.InsertCursor(org.stands.fullPath,["SHAPE"])
-            # Obtain new stand's object ID
-            productPolygon_ID = prod_ic.insertRow([None])
-            del prod_ic
+            # Act according to descision value:
+            descision = self.getSelfValue(60006)
+            if descision == '1':
+                # Desicion is '1' - approved for merge
+                # 1) Copy line's origin stands and related tables
+                # from current database to the buckup database.
+                # 2) Delete origin stands and their related tables. 
+                # 3) Update the line's origin stands guid to the 
+                # new guid from the buckup database.
+                # 4) Update the line's status to 0 - ממתין להחלטה.
+                # 5) Annex sekerpoints to the new stands.
 
-            # Create a Product Polygon (new stand) object
-            sql_expression = f"{org.stands.oidFieldName} = {productPolygon_ID}"
-            prod_uc = arcpy.UpdateCursor(org.stands.fullPath, sql_expression)
-            prod_r = prod_uc.next()
-            self.productPolygon = PoductPolygon(self, prod_r, org.stands)
+                # copy stand to the backup database
+                # and update the line's origin stands guid to the new guid
+                # from the buckup database.
+                orig_relationship_ls = self.FC.relationships['ls']
+                orig_FC = orig_relationship_ls.destination
+                fieldNames = [field.name for field in orig_FC.desc.fields]
+                buckup_relationship_ls = org_buckup.relationships['ls']
+                buckup_FC = buckup_relationship_ls.destination
+                # replace shape field with "SHAPE@"
+                for i, fieldName in enumerate(fieldNames):
+                    if fieldName.lower() == 'shape':
+                        fieldNames[i] = 'SHAPE@'
+                standIDs_old = self.getSelfValue([60007, 60008])
+                standIDs_new = ['', '']
+                standID_product = self.getSelfValue(60002)
+                for i, standID in enumerate(standIDs_old):
+                    sqlQuery = buildSqlQuery(orig_FC.fullPath,
+                                             orig_relationship_ls.foreignKey_fieldName,
+                                             standID)
+                    
+                    orig_uc = arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = sqlQuery)
+                    buckup_ic = arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames)
+                    for orig_r in orig_uc:
+                        # insert row to the buckup gdb and collect the globalID
+                        buckupObjectid = buckup_ic.insertRow(orig_r)
+                        # delete the original stand row
+                        orig_uc.deleteRow()
+                    del buckup_ic, orig_uc, orig_r
+                    # get the new guid
+                    buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
+                    buckup_sc = arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery)
+                    for buckup_r in buckup_sc:
+                        standIDs_new[i] = buckup_r[0]
+                    del buckup_sc
+                    
+                    
+                    # copy stands' rows from related tables
+                    # to the buckup database.
+                    for nickname in stands_tables_relationships.keys():
+                        # stX - st1, st2, st3, st4
+                        orig_relationship_stX = org.relationships[nickname]
+                        orig_tableX = orig_relationship_stX.destination
+                        buckup_relationship_stX = org_buckup.relationships[nickname]
+                        buckup_tableX = buckup_relationship_stX.destination
+                        
+                        # locate foreignKey_fieldName ('stand_id') field index:
+                        fieldNames_table = [field.name for field in orig_tableX.desc.fields]
+                        foreignKey_index = [i for i, field in enumerate(fieldNames_table) if field.lower() == orig_relationship_stX.foreignKey_fieldName.lower()][0]
+                        sqlQuery = buildSqlQuery(orig_tableX.fullPath,
+                                                 orig_relationship_stX.foreignKey_fieldName,
+                                                 standID)
+                        orig_uc = arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, where_clause = sqlQuery)
+                        buckup_ic = arcpy.da.InsertCursor(buckup_tableX.fullPath, fieldNames_table)
+                        for orig_r in orig_uc:
+                            # replace the foreignKey field value with the new guid
+                            orig_r = list(orig_r)
+                            orig_r[foreignKey_index] = standIDs_new[i]
+                            # insert row to the buckup gdb
+                            buckup_ic.insertRow(tuple(orig_r))
+                            # delete the original table row
+                            orig_uc.deleteRow()
+                        del orig_uc, buckup_ic
+                    
+                    # assign sekerpoints to the new stand
+                    orig_relationship_sp = org.relationships['sp']
+                    orig_sekerpointsFC = orig_relationship_sp.destination
+                    sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath,
+                                                         orig_relationship_sp.foreignKey_fieldName,
+                                                         standID)
+                    orig_sekerpoints_uc = arcpy.UpdateCursor(orig_sekerpointsFC.fullPath,
+                                                 where_clause = sekerpoints_sqlQuery)
+                    for orig_sekerpoints_r in orig_sekerpoints_uc:
+                        # replace the foreignKey field value with the new guid
+                        orig_sekerpoints_r.setValue(orig_relationship_sp.foreignKey_fieldName, standID_product)
+                        orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
+                    del orig_sekerpoints_uc
 
-            self.productPolygon.calculateAndWrite()
-            prod_uc.updateRow(self.productPolygon.row)
-            del prod_uc
-            
-            calculatedJoints.append(self)
-        
-        else:
-            # write joint status:
-            self.writeSelf(60003, 'לא תקין')
-        
-        self.notifier.write()
+                # update the line's origin stands guid to the new guid
+                # from the buckup database.
+                # update the line's status to None (null).
+                self.writeSelf([60006, 60007, 60008], [None] + standIDs_new)
+
+            elif descision == '2':
+                # Desicion is '2' - restore from buckup.
+                #@PATCH_TEMPORARY_7.25
+                pass
+
+            else:
+                arcpy.AddMessage('UniteLine descision is not 1 or 2, no action taken.')
 
     def getStands(self, standsFC):
         """
@@ -2527,59 +2591,6 @@ class UniteLine(FcRow):
         del stands_sc
         return stands
 
-    def validateJoint(self):
-        """
-        Runs a set of tests to validate the joint between two stands:
-        1 - Two stands
-        2 - Same Helka
-        3 - Stands has not been used by other joint
-        4 - Stands touch each other. for now - does not disqualify joint.
-        Returns Boolean.
-        """
-        stepName = 'validateJoint'
-        # A default result:
-        result = True
-
-        # Conditions are numbered:
-        # 1 - the endpoints of the line are within 2 stands:
-        if len(self.stands) != 2:
-            txt = "line does not start or end within 2 stands."
-            self.notifier.add(stepName, 'warning', txt)
-            # The next conditions require 2 polygons,
-            # so 'return' (break) is appropriate.
-            return False
-        
-        # 2 - stands belong to the same 'HELKA':
-        helka_numbers = [stand.getSelfData(50003) for stand in self.stands]
-        if len(removeDup(helka_numbers)) != 1:
-            txt = "polygons are not in the same helka."
-            self.notifier.add(stepName, 'warning', txt)
-            result = False
-
-        # 3 - stands objectid has not been used for other union:
-        for stand in self.stands:
-            stand_id = stand.id
-            for joint in calculatedJoints:
-                calculated_standIDs = [s.id for s in joint.stands]
-                if stand_id in calculated_standIDs:
-                    # stand was already been used for another unite line:
-                    txt = "stand (id - %s) was used for another unite line (line id - %s)." % (stand_id, joint.id)
-                    self.notifier.add(stepName, 'warning', txt)
-                    result = False
-
-        # 4 - stands geometry relation is TOUCHING
-        stand_shapes = [s.getSelfData(50001) for s in self.stands]
-        spatial_relation = get_spatialRelation(stand_shapes)
-        spatial_relation_txt = ','.join(spatial_relation)
-        self.writeSelf(60004, spatial_relation_txt)
-        if "Touches" not in spatial_relation:
-            txt = "polygons are not touching. Instead they are: %s." % spatial_relation
-            self.notifier.add(stepName, 'warning', txt)
-            #for now this condition DOES NOT DISQUALITY a joint.
-            #result = False
-        
-        return result
-    
 class StandPolygon(FcRow):
     def __init__(self, parentFcRow, row, sekerpointsFC):
         FcRow.__init__(self, row, sekerpointsFC)
@@ -2604,7 +2615,6 @@ class StandPolygon(FcRow):
         # Self values - from the stand polygon itself
         fieldCodes_self = [
             50001,
-            50024,
             50002, 50003, 50004,
             50027, 50081, 50042, 50043,
             50046, 50047, 50048, 50049, 
@@ -5574,7 +5584,9 @@ arcpy.env.overwriteOutput = True
 org = Organizer(
     input_stands,
     input_unitelines,
-    stands_tables_relationships
+    input_sekerpoints,
+    stands_tables_relationships, 
+    sekerpoints_tables_relationships
 )
 
 fieldsDict = fieldsExcelToDict(fieldsExcel, fieldsExcel_sheet)
@@ -5593,20 +5605,10 @@ if invalidFields:
     errorText = 'Please fix these fields and run again.'
     arcpy.AddError(errorText)
 
-#speciesDict = speciesExcelToDict(speciesExcel) #deprecated
-#speciesConversions = speciesExcelToDict1(speciesExcel) #deprecated
-
-#Create species hierarchy:
-root = Node()
-arrayToTree(speciesHierarchy_jsonObject, root)
-#create speciesDict based on root node:
-speciesDict = createSpeciesDict(root, speciesHierarchy_path)
-#Verify that every alternative code has a corresponding node in under root.
-verifyAlternativeNodes(root, speciesDict)
-
 #### Process section 0: ####
 # Check fields exist and notify if not.
-
+#@PATCH_TEMPORARY_7.25 - does not check fields
+"""
 # 0.1 Check all the input fields exist (excel column checkIfExists)
 #A1) First check fields of stands:
 fieldsToCheck = [x for x in fieldsDict.values() if hasattr(x,'code')]
@@ -5654,202 +5656,42 @@ if missingFields:
     arcpy.AddError(errorText)
 
 del smallFieldObj, fieldsToCheck_relatedTable, fieldsToCheck_relted_tables, fieldsToCheck_relatedTable_specific, fieldsToCheck_relted_points, destination
+"""
 
 #### Process section 1: ####
-#A) Delete product polygons of previous calculation.
-arcpy.AddMessage('Deleting previous product stands and their related rows.')
-orig_field = fieldsDict[unitelines_stands_relationship['originKey_code']].name
-orig_field_exists = orig_field.lower() in [f.name.lower() for f in org.unitelines.desc.fields]
-dest_field = fieldsDict[unitelines_stands_relationship['destinationKey_code']].name
-dest_field_exists = dest_field.lower() in [f.name.lower() for f in org.stands.desc.fields]
-stand_Keys = []
-if orig_field_exists and dest_field_exists:
-    # get all destination values:
-    with arcpy.da.SearchCursor(org.unitelines.fullPath, [orig_field]) as sc:
-        for r in sc:
-            if r[0] is not None:
-                stand_Keys.append(r[0])
-    # create a definition query for stands and delete rows.
-    # include (area = 0) for stands that didn't finish process (empty).
-    sql_expression = 'shape_area = 0'
-    if stand_Keys:
-        sql_expression += ' OR %s IN (%s)' % (dest_field, ','.join([f"'{key}'" for key in stand_Keys]))
-    with arcpy.da.UpdateCursor(org.stands.fullPath, [dest_field], where_clause=sql_expression) as uc:
-        for r in uc:
-            stand_Key = r[0]
-            if stand_Key not in stand_Keys:
-                stand_Keys.append(stand_Key)
-            arcpy.AddMessage("~~~~~deleting polygon: %s~~~~~" % stand_Key)
-            uc.deleteRow()
+# Initiate buck-up database:
+# If it exists - identify it with a new Organizer object,
+# if not - create a new, empty one, based on the input database scheme.
+"""
+message = 'Creating a buck-up database...'
+arcpy.AddMessage(message)
+arcpy.SetProgressor("default",message)and
+"""
+org.initBuckupDatabase()
 
-#B) Delete rows of product polygons' related tables.
-if stand_Keys:
-    for relationshipClass in org.relationships.values():
-        if relationshipClass.destination.desc.dataType != 'Table':
-            continue
-        dest_field = relationshipClass.foreignKey_fieldName
-        sql_expression = '%s IN (%s)' % (dest_field, ','.join([f"'{key}'" for key in stand_Keys]))
-        with arcpy.da.UpdateCursor(relationshipClass.destination.fullPath, [dest_field], where_clause=sql_expression) as uc:
-            for r in uc:
-                uc.deleteRow()
-
+# Create a new Organizer object for the buck-up database:
+org_buckup = org.replicate()
 
 
 #### Process section 2: ####
-# Create fields in unite lines
-# Find the relevant fields, based on 'toAdd' attribute:
-fieldsToHandle = set()
-for sf in fieldsDict.values():
-    #Not all values have these attributes.
-    if hasattr(sf,'toAdd') and hasattr(sf,'code'):
-        #Checks: 1)need to add, and 2)belongs to 'lines':
-        if sf.toAdd and str(sf.code)[:2] == '60':
-            fieldsToHandle.add(sf)
-#sort fieldsToHandle by sequence:
-fieldsToHandle = list(fieldsToHandle)
-fieldsToHandle.sort(key = lambda x: (x.sequence, x.code))
-
-# one of the fields might be used by relationship class.
-# if it does - delete the relationship class.
-# this part was created in order to avoid errors
-# that arise from deleting fields that are used by relationships.
-relationship_name = "_".join([org.unitelines.name, org.stands.name])
-relationship_fullPath = os.path.join(arcpy.env.workspace, relationship_name)
-if arcpy.Exists(relationship_fullPath):
-    desc = arcpy.Describe(relationship_fullPath)
-    if desc.dataType == 'RelationshipClass':
-        if fieldsDict[60002].name.lower() == desc.originClassKeys[0][0].lower():
-            arcpy.management.Delete(relationship_fullPath)
-    else:
-        arcpy.management.Delete(relationship_fullPath)
-
-#@PATCH_TEMPORARY_7.25
-# Validate domain of conclusion field:
-conclusion_field = fieldsDict[60006]
-if conclusion_field in fieldsToHandle:
-    # Check if the domain exists:
-    domain_name = conclusion_field.domain
-    domainValues = [
-        {'code': '0', 'value': 'ממתין להחלטה'},
-        {'code': '1', 'value': 'מאושר לאיחוד'},
-        {'code': '2', 'value': 'לשחזור מגיבוי'},
-    ]
-    if domain_name not in org.stands.wsDomains:
-        # Create a new domain:
-        arcpy.management.CreateDomain(org.stands.workspace,
-                                      domain_name,
-                                      field_type="TEXT",
-                                      domain_type="CODED")
-        # Update wsDomains:
-        org.stands.wsDomains = arcpy.Describe(org.stands.workspace).domains
-        org.unitelines.wsDomains = arcpy.Describe(org.unitelines.workspace).domains
-        # Add values to the domain:
-        for dict in domainValues:
-            arcpy.management.AddCodedValueToDomain(org.stands.workspace,
-                                                   domain_name,
-                                                   dict['code'],
-                                                   dict['value'])
-    else:
-        # Check that the domain has the required values:
-        existingValues = listCodedValues(org.stands.workspace, domain_name)
-        for dict in domainValues:
-            if dict['code'] not in existingValues:
-                # Add the missing value to the domain:
-                arcpy.management.AddCodedValueToDomain(org.stands.workspace,
-                                                       domain_name,
-                                                       dict['code'],
-                                                       dict['value'])
-
-#@PATCH_TEMPORARY_7.25 - end
-
-#Notify in UI about process start:
-message = 'Adding output fields to: %s.' % org.unitelines.name
-fieldsCount = len(fieldsToHandle)
-arcpy.SetProgressor("step",message,0,fieldsCount,1)
-arcpy.AddMessage(message)
-
-counter = 1
-for smallFieldObj in fieldsToHandle:
-    tempMessage = message + " (%s of %s)" % (counter, fieldsCount)
-    arcpy.SetProgressorLabel(tempMessage)
-
-    arcpy.AddMessage('\t-Adding field: %s, %s.' % (smallFieldObj.name, smallFieldObj.alias))
-    #Fields should be either:
-    # 1) created blank,
-    # or
-    # 2) moved to their place by sequence, keeping their values.
-    if smallFieldObj.toAdd == 'keepValues':
-        globalID_fieldObj = fieldsDict[60000]
-        moveFieldToEnd(org.unitelines, smallFieldObj, globalID_fieldObj)
-    elif smallFieldObj.toAdd == 'blank':
-        createBlankField(org.unitelines, smallFieldObj)
-
-    arcpy.SetProgressorPosition()
-    counter += 1
-del counter, tempMessage
-arcpy.ResetProgressor()
-
-
-
-#### Process section 3: ####
-# relate unite lines with stands FCs:
-# every unite line has a new polygon related to it.
-
-#Notify in UI about process start:
-message = 'Creating relationship class: unite lines → stands'
-arcpy.SetProgressor("default",message)
-arcpy.AddMessage(message)
-
-"""
-Nickname of the relationship, represents the relationship class and its
-function in the code. Stays constant and independent of featureclasses'
-or tables' names, so using it is favorable.
-"""
-
-# The fields of linkage: 
-# from: unite lines, stand_id, 60002
-# to:   stands,      GlobalID, 50024
-originKey_name = fieldsDict[unitelines_stands_relationship['originKey_code']].name
-destinationKey_name = fieldsDict[unitelines_stands_relationship['destinationKey_code']].name
-nickname = unitelines_stands_relationship['nickname']
-newRelationship_desc = createRelation(org.unitelines, originKey_name, org.stands, destinationKey_name)
-relationshipClass = RelationshipClass(newRelationship_desc.name, nickname, org.unitelines)
-org.relationships[nickname] = relationshipClass
-arcpy.ResetProgressor()
-
-
-#### Process section 4: ####
-# Create Matrices: 
-# Must run after creation of fields.
-
-forestVegFormCoordinator = MatrixCoordinator(forestVegFormExcel)
-standVegFormCoordinator = MatrixCoordinator(standVegFormExcel)
-speciesCompositionCoordinator = MatrixCoordinator(speciesCompositionExcel)
-relativeDensityKeyCoordinator = Matrix3DCoordinator(relativeDensityKeyExcel)
-totalCoverageCoordinator = TotalCoverageMatrixCoordinator(totalCoverageExcel, org.stands.shapeType)
-
-
-#### Process section 5: ####
 # Go through each unite line:
 
 #Notify in UI about process start:
-message = 'Calculating...'
+message = 'Handling changes...'
 featureCount = getFeatureCount(org.unitelines.name)
 arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
 counter = 1
 
-# A list of UniteLine object, that are valid and were calculated:
-calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
-    #where_clause = 'OBJECTID > 130', #for debug!!!
+    #where_clause = 'OBJECTID = 1', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
 for uniteLines_r in uniteLines_uc:
-    tempMessage = 'Calculating... (row: %s of %s feafures)' % (counter, featureCount)
+    tempMessage = 'Handling changes... (row: %s of %s feafures)' % (counter, featureCount)
     arcpy.SetProgressorLabel(tempMessage)
 
     standObj = UniteLine(uniteLines_r, org.unitelines)
