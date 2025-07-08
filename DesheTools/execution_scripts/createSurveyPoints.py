@@ -46,7 +46,7 @@ def getN(A_dunam):
     if A_dunam <= 60:
         return 1
     else:
-	return int(math.ceil((A_dunam-20)/40.0))
+        return int(math.ceil((A_dunam-20)/40.0))
 
 def getOidFieldName(fc):
     #returns the Objectid field of a fc.
