@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
+import re
 import arcpy
-import json
 import math
 from collections import Counter
 import numpy as np
@@ -10,10 +10,10 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi_1.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3233_fnl')
-    input_unitelines = os.path.join(input_workspace, 'unite_L')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_Tzora')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\9.7.2025 - apply\NirEtzion_1111_verification.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
+    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_NirEtzion')
     #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 else:
@@ -2495,7 +2495,8 @@ class UniteLine(FcRow):
                         buckupObjectid = buckup_ic.insertRow(orig_r)
                         # delete the original stand row
                         orig_uc.deleteRow()
-                    del buckup_ic, orig_uc, orig_r
+                    del buckup_ic, orig_uc
+                    if 'orig_r' in locals(): del orig_r
                     # get the new guid
                     buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
                     buckup_sc = arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery)
@@ -5672,8 +5673,33 @@ org.initBuckupDatabase()
 # Create a new Organizer object for the buck-up database:
 org_buckup = org.replicate()
 
-
 #### Process section 2: ####
+# Check for .lock files in the databases:
+lock_pattern = re.compile(r".*\.lock$")
+for organizerInspected in [org, org_buckup]:
+    inspectedDatasets = set()
+    for relationship in organizerInspected.relationships.values():
+        inspectedDatasets.add(relationship.destination.fullPath)
+        inspectedDatasets.add(relationship.origin.fullPath)
+    for i in inspectedDatasets:
+        try:
+            if not arcpy.TestSchemaLock(i):
+                error_message = f"dataset {i} has a schema lock."
+                raise arcpy.ExecuteError(error_message)
+        except arcpy.ExecuteError:
+            arcpy.AddError("Script aborted due to active geodatabase locks.")
+            # You might want to exit more forcefully if not in a script tool context
+            # import sys
+            # sys.exit(1)
+            raise # Re-raise the error to propagate it and stop the script tool execution
+        except Exception as e:
+            # Catch any other unexpected errors during the lock file check
+            arcpy.AddError(f"An unexpected error occurred during lock check: {e}")
+            raise # Re-raise to stop the script tool execution
+
+    
+
+#### Process section 3: ####
 # Go through each unite line:
 
 #Notify in UI about process start:
@@ -5694,8 +5720,8 @@ for uniteLines_r in uniteLines_uc:
     tempMessage = 'Handling changes... (row: %s of %s feafures)' % (counter, featureCount)
     arcpy.SetProgressorLabel(tempMessage)
 
-    standObj = UniteLine(uniteLines_r, org.unitelines)
-    uniteLines_uc.updateRow(standObj.row)
+    lineObj = UniteLine(uniteLines_r, org.unitelines)
+    uniteLines_uc.updateRow(lineObj.row)
 
     arcpy.SetProgressorPosition()
     counter += 1
