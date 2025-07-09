@@ -194,19 +194,19 @@ def update_attachments_in_gdb(gdb_path, attachment_table_name, compressed_images
 # Example usage of the function:
 if __name__ == "__main__":
     # Define the parameters
-    gdb_path_example = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\smy4129.gdb"
-    attachment_table_example = "samples__ATTACH"
-    output_folder_example = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\Exported_Images"
+    gdb_path_example = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Dudaim\Dudaim_4129_verification.gdb"
+    attachment_table_example = "smy_HaDudaim2024__ATTACH"
+    output_folder_example = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Dudaim\Exported_Images"
 
     # Call the function
     export_attachments_from_gdb(gdb_path_example, attachment_table_example, output_folder_example)
 
     # Define your input and output folders
     # This should be the same output folder you used in the previous function to export images
-    input_images_folder = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\Exported_Images"
+    input_images_folder = output_folder_example
     
     # Define a new folder for the compressed images
-    output_compressed_folder = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\Compressed_Images"
+    output_compressed_folder = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Dudaim\Compressed_Images"
 
     # Call the compression function
     compress_images_in_folder(input_images_folder, output_compressed_folder, scale_factor=0.5)
@@ -215,10 +215,10 @@ if __name__ == "__main__":
     # compress_images_in_folder(input_images_folder, r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\Compressed_Images_25_percent", scale_factor=0.25)
 
     # Define the parameters for updating attachments
-    gdb_path = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\smy4129.gdb"
-    attachment_table = "samples__ATTACH"
+    gdb_path = gdb_path_example
+    attachment_table = attachment_table_example
     # This should be the output folder from the image compression step
-    compressed_folder = r"D:\Yoav\OneDrive - Tel-Aviv University\GIS\Products\Compressed_Images"
+    compressed_folder = output_compressed_folder
 
     # Call the function to update attachments
     update_attachments_in_gdb(gdb_path, attachment_table, compressed_folder, run_compact=True)

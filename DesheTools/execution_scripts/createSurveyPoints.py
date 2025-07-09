@@ -40,13 +40,13 @@ toBeDeleted.add(clippedFN_k)
 
 
 #FUNCTIONS:
-def getN(A_dunam):
     # 04/19/24 Changing the threshold value from 60 to 40 dunams
     # 21/02/25 Changing the threshold value from 40 to 60 dunams
-    if A_dunam <= 60: 
+def getN(A_dunam):
+    if A_dunam <= 60:
         return 1
     else:
-	    return int(math.ceil(A_dunam/60.0))
+        return int(math.ceil((A_dunam-20)/40.0))
 
 def getOidFieldName(fc):
     #returns the Objectid field of a fc.
