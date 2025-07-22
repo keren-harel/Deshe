@@ -7,10 +7,10 @@ from collections import Counter
 import numpy as np
 
 #TOOL PARAMETERS
-debug_mode = False
+debug_mode = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\9.7.2025 - apply\NirEtzion_1111_verification.gdb'
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_DD1.gdb'
     input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
     input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
     input_sekerpoints = os.path.join(input_workspace, 'smy_NirEtzion')
@@ -164,7 +164,7 @@ def fieldsExcelToDict(excelPath, sheet):
     arcpy.management.Delete(tempTableName)
     return outputDict
 
-def buildSqlQuery(featureClass, fieldName, value, mode = "="):
+def buildSqlQuery(featureClass, fieldName, value, mode = "=", wQuote = True):
     """
     Takes:
        featureClass = featureClass path.
@@ -175,10 +175,12 @@ def buildSqlQuery(featureClass, fieldName, value, mode = "="):
     """
     featureClass_workspace = os.path.dirname(arcpy.Describe(featureClass).catalogPath)
     fieldName_delimited = arcpy.AddFieldDelimiters(featureClass_workspace, fieldName)
+    if wQuote:
+        value = f"'{value}'"
     if mode in ("=", "<>"):
-        return """{0} {1} '{2}'""".format(fieldName_delimited, mode, value)
+        return """{0} {1} {2}""".format(fieldName_delimited, mode, value)
     elif mode in ("= timestamp", "<> timestamp"):
-        return """{0} {1} '{2}'""".format(fieldName_delimited, mode, value)
+        return """{0} {1} {2}""".format(fieldName_delimited, mode, value)
     else:
         return ""
 
@@ -5702,14 +5704,200 @@ for organizerInspected in [org, org_buckup]:
 #### Process section 3: ####
 # Go through each unite line:
 
-#Notify in UI about process start:
-message = 'Handling changes...'
-featureCount = getFeatureCount(org.unitelines.name)
+# Check for existing locks:
+# Collect all datasets that are inspected for locks:
+# This includes both the original and the buck-up databases.
+inspectedDatasets = set()
+for organizerInspected in [org, org_buckup]:
+    for relationship in organizerInspected.relationships.values():
+        inspectedDatasets.add(relationship.destination.fullPath)
+        inspectedDatasets.add(relationship.origin.fullPath)
+inspectedDatasets = list(inspectedDatasets)
+inspectedDatasets_locks = [i for i in inspectedDatasets if not arcpy.TestSchemaLock(i)]
+try:
+    if inspectedDatasets_locks:
+        inspectedDatasets_locks_desc = [arcpy.Describe(i) for i in inspectedDatasets_locks]
+        messages = [f'gdb: {d.workspace.name} - dataset: {d.name}.' for d in inspectedDatasets_locks_desc]
+        error_message = f"The following datasets have a schema lock:\n" + "\n\t".join(messages)
+        raise arcpy.ExecuteError(error_message)
+    else:
+        arcpy.AddMessage(f"Did not fing schema locks.")
+        # Get a list of Unite Lines object IDs:
+        uniteLines_OIDs = []
+        with arcpy.da.SearchCursor(
+            org.unitelines.fullPath,
+            [org.unitelines.oidFieldName],
+            where_clause='OBJECTID IS NOT NULL'
+        ) as oid_cursor:
+            for row in oid_cursor:
+                uniteLines_OIDs.append(row[0])
+except arcpy.ExecuteError:
+    arcpy.AddError("Script aborted due to geodatabase access issues.")
+    # No need to stopEditing here; the 'with' statement for editor handles it.
+    raise # Re-raise to signal failure to the geoprocessing framework
+
+# Notify in UI about process start:
+message = 'Processing Unite Lines...'
+featureCount = len(uniteLines_OIDs)
 arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
-counter = 1
+
+# --- Start editing the geodatabase: ---
+# Create an editor object for both databases:
+with arcpy.da.Editor(org.unitelines.workspace) as editor_orig:
+    with arcpy.da.Editor(org_buckup.unitelines.workspace) as editor_buckup:
+        for lineOID in uniteLines_OIDs:
+            arcpy.SetProgressorPosition()
+            counter = uniteLines_OIDs.index(lineOID)+1
+            arcpy.AddMessage(f"Processing Unite Line: {counter} of {featureCount}")
+            #editor_orig.startOperation()
+            #editor_buckup.startOperation()
+            # Create an SearchCursor for the Unite Lines feature class,
+            # gather the necessary fields, and terminate the cursor.
+            unitelines_fieldCodes = [60002, 60003, 60006, 60007, 60008]
+            unitelines_fieldNames = [fieldsDict[code].name for code in unitelines_fieldCodes]
+            unitelines_sqlQuery = buildSqlQuery(org.unitelines.fullPath, org.unitelines.oidFieldName, lineOID, wQuote = False)
+            with arcpy.da.SearchCursor(
+                org.unitelines.fullPath,
+                unitelines_fieldNames,
+                where_clause=unitelines_sqlQuery
+            ) as unitelines_sc:
+                for unitelines_row in unitelines_sc:
+                    # a dict that coordinates between field codes and their values:
+                    uniteline_fieldValues = {code: unitelines_row[i] for i, code in enumerate(unitelines_fieldCodes)}
+            # valid joint condition:
+            # stats is 'תקין' and product stand_id is not None.
+            joint_isValid = uniteline_fieldValues[60003] == 'תקין' and uniteline_fieldValues[60002]
+            if not joint_isValid:
+                # If the joint is not valid, skip this row.
+                arcpy.AddMessage(f"Skipping Unite Line OID: {lineOID} - Joint is not valid. Check unite line's status or stand id.")
+                continue
+            # Joint is valid.
+            # Act according to descision value:
+            descision = uniteline_fieldValues[60006]
+            if descision == '1':
+                # copy stand to the backup database
+                # and update the line's origin stands guid to the new guid
+                # from the buckup database.
+                orig_relationship_ls = org.unitelines.relationships['ls']
+                orig_FC = orig_relationship_ls.destination
+                fieldNames = [field.name for field in orig_FC.desc.fields]
+                buckup_relationship_ls = org_buckup.relationships['ls']
+                buckup_FC = buckup_relationship_ls.destination
+                # replace shape field with "SHAPE@"
+                for i, fieldName in enumerate(fieldNames):
+                    if fieldName.lower() == 'shape':
+                        fieldNames[i] = 'SHAPE@'
+                standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
+                standIDs_new = ['', '']
+                standID_product = uniteline_fieldValues[60002]
+                for i, standID in enumerate(standIDs_old):
+                    origStand_sqlQuery = buildSqlQuery(orig_FC.fullPath,
+                                                       orig_relationship_ls.foreignKey_fieldName,
+                                                       standID)
+                    
+                    # COPY-PASTE stands - start two cursors:
+                    # NOTICE - the original stand is not deleted yet, 
+                    # since deleting it prevents locating its related rows by standID.
+                    with arcpy.da.SearchCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_sc:
+                        with arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames) as buckup_ic:
+                            for orig_r in orig_sc:
+                                # insert row to the buckup gdb and collect its OBJECTID
+                                buckupObjectid = buckup_ic.insertRow(orig_r)
+                                arcpy.AddMessage('added row to buckup gdb')
+                    # get the new guid of the buckup stand
+                    buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
+                    with arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery) as buckup_sc:
+                        for buckup_r in buckup_sc:
+                            standIDs_new[i] = buckup_r[0]
+                    # COPY-PASTE stands - completed
+                    #editor_orig.stopOperation()
+                    #editor_buckup.stopOperation()
+                    
+                    # CUT-PASTE stand's rows of related tables:
+                    #editor_orig.startOperation()
+                    #editor_buckup.startOperation()
+                    for nickname in stands_tables_relationships.keys():
+                        # stX - st1, st2, st3, st4
+                        orig_relationship_stX = org.relationships[nickname]
+                        orig_tableX = orig_relationship_stX.destination
+                        buckup_relationship_stX = org_buckup.relationships[nickname]
+                        buckup_tableX = buckup_relationship_stX.destination
+                        
+                        # locate foreignKey_fieldName ('stand_id') field index:
+                        fieldNames_table = [field.name for field in orig_tableX.desc.fields]
+                        foreignKey_index = [i for i, field in enumerate(fieldNames_table) if field.lower() == orig_relationship_stX.foreignKey_fieldName.lower()][0]
+                        sqlQuery = buildSqlQuery(orig_tableX.fullPath,
+                                                 orig_relationship_stX.foreignKey_fieldName,
+                                                 standID)
+                        with arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, sqlQuery) as orig_uc:
+                            with arcpy.da.InsertCursor(buckup_tableX.fullPath, fieldNames_table) as buckup_ic:
+                                for orig_r in orig_uc:
+                                    # replace the foreignKey field value with the new guid
+                                    orig_r = list(orig_r)
+                                    orig_r[foreignKey_index] = standIDs_new[i]
+                                    # insert row to the buckup gdb
+                                    buckup_ic.insertRow(tuple(orig_r))
+                                    arcpy.AddMessage('added row to buckup gdb - related table: %s' % orig_tableX.name)
+                                    # delete the original table row
+                                    orig_uc.deleteRow()
+                                    arcpy.AddMessage('deleted row from original gdb - related table: %s' % orig_tableX.name)
+                    # CUT-PASTE stand's rows of related tables - completed
+                    #editor_orig.stopOperation()
+                    #editor_buckup.stopOperation()
+
+                    # ASSAIN sekerpoints to the new buckup stand:
+                    #editor_orig.startOperation()
+                    #editor_buckup.startOperation()
+                    orig_relationship_sp = org.relationships['sp']
+                    orig_sekerpointsFC = orig_relationship_sp.destination
+                    sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, standID)
+                    with arcpy.da.UpdateCursor(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, sekerpoints_sqlQuery) as orig_sekerpoints_uc:
+                        for orig_sekerpoints_r in orig_sekerpoints_uc:
+                            # replace the foreignKey field value with the new guid
+                            orig_sekerpoints_r[0] = standID_product
+                            orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
+                            arcpy.AddMessage('updated sekerpoint to buckup stand - sekerpoint: %s' % orig_sekerpoints_r[0])
+                    # ASSAIN sekerpoints to the new buckup stand - completed
+                    #editor_orig.stopOperation()
+                    #editor_buckup.stopOperation()
+
+                    # DELETE stand from the original database:
+                    #editor_orig.startOperation()
+                    #editor_buckup.startOperation()
+                    arcpy.AddMessage('Deleting original stand: %s' % origStand_sqlQuery)
+                    with arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_uc:
+                        for orig_r in orig_uc:
+                            orig_uc.deleteRow()
+                            arcpy.AddMessage('~deleted~')
+                    # DELETE stand from the original database - completed
+                    #editor_orig.stopOperation()
+                    #editor_buckup.stopOperation()
+                
+                # UPDATE unite line with backup stand IDs:
+                #editor_orig.startOperation()
+                #editor_buckup.startOperation()
+                unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
+                with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
+                    for unitelines_r in unitelines_uc:
+                        # update the row with the new buckup stand IDs
+                        unitelines_r[0] = standIDs_new[0]
+                        unitelines_r[1] = standIDs_new[1]
+                        unitelines_uc.updateRow(unitelines_r)
+                        # update the line's status to None (null)
+                        unitelines_r[2] = None
+                        arcpy.AddMessage('updated unite line with new buckup stand IDs')
+                # UPDATE unite line with backup stand IDs - completed
+                #editor_orig.stopOperation()
+                #editor_buckup.stopOperation()
+
+                editor_orig.stopOperation()
+                editor_buckup.stopOperation()
+
+                
 
 
+"""
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
     #where_clause = 'OBJECTID = 1', #for debug!!!
@@ -5717,12 +5905,11 @@ uniteLines_uc = arcpy.UpdateCursor(
     )
 #Main iteration:
 for uniteLines_r in uniteLines_uc:
-    tempMessage = 'Handling changes... (row: %s of %s feafures)' % (counter, featureCount)
     arcpy.SetProgressorLabel(tempMessage)
 
     lineObj = UniteLine(uniteLines_r, org.unitelines)
     uniteLines_uc.updateRow(lineObj.row)
 
     arcpy.SetProgressorPosition()
-    counter += 1
 del uniteLines_uc
+"""
