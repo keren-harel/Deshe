@@ -1,0 +1,31 @@
+שכבת עומדים
+
+<table cellpadding="0px" cellspacing="3px">
+<tbody>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>חלקה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{HELKA}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>עומד</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{STAND_NO}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>יער</b></td><td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{FOR_NAM}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>שנת נטיעה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{START_YEAR}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הרכב מינים</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{CoverTypeName}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>קבוצת גיל מחושבת</b></td><td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{ageCategory}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b> שטח</b><b><br /></b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{NET_AREA}<br /></td>
+</tr>
+</tbody></table>

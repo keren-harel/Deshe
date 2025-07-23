@@ -1,0 +1,19 @@
+הערות קוויות סוקר
+
+
+
+<table cellpadding="0px" cellspacing="3px">
+<tbody>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הערה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{SokerRemark}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>תאריך</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{DateRemark}</td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>שם סוקר</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{Creator}</td>
+</tr>
+</tbody></table>
