@@ -36,7 +36,7 @@ fields = {"feature1": {"name" : "feature1",
         }
 
 #fieldOI_3 = "MainForestLayerVegForm2"
-fieldOI_3 = "CoverTypeName"
+fieldOI_3 = "cov_type_name"
 fieldOI_4 = "ageCategory"
 #HORESH / SIHIA / BATA / ESBONI.
 fieldOI_2 = fieldOI_3
