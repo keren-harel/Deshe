@@ -1,0 +1,36 @@
+#------------------------------------
+#	get_age_group(!START_YEAR!)
+#------------------------------------
+
+from datetime import datetime
+
+# List of tuples
+section122_backwards = [
+    (1, 'בהקמה (1)'),
+    (2, 'בהקמה (2)'),
+    (3, 'בהקמה (3)'),
+    (4, 'בהקמה (4)'),
+    (5, 'בהקמה (5)'),
+    (10, 'חדש (6-10)'),
+    (15, 'צעיר (11-15)'),
+    (20, 'צעיר (16-20)'),
+    (25, 'מתבגר (21-25)'),
+    (30, 'מתבגר (26-30)'),
+    (40, 'בוגר (31-40)'),
+    (50, 'בוגר (41-50)'),
+    (60, 'בוגר (51-60)'),
+    (75, 'ותיק (61-75)'),
+    (90, 'ותיק (76-90)'),
+    (105, 'ותיק (91-105)'),
+    (120, 'ותיק (106-120)')
+]
+
+# Function to calculate age and return the appropriate group
+def get_age_group(year_of_establishment):
+    current_year = datetime.now().year
+    age = current_year - year_of_establishment
+    
+    for age_limit, group in section122_backwards:
+        if age <= age_limit:
+            return group
+   
