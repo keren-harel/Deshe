@@ -65,5 +65,5 @@ def get_value_by_key(key):
     if key in code_to_text:
         return code_to_text[key]
     else:
-        return "Key not found"
+        return key
     
