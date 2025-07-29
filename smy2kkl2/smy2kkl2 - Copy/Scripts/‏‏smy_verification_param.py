@@ -523,7 +523,7 @@ if __name__=='__main__':
                 if row[0] in bad_values:
                         cnt += 1
             if cnt > 0:
-                arcpy.AddMessage(f'\tThe {tab} table have {cnt} rows with values: {bad_values}' )
+                arcpy.AddWarning(f'\tThe {tab} table have {cnt} rows with values: {bad_values}' )
             else:
                 arcpy.AddMessage(f'\tThe {tab} table does not have "bad" values.')
 
