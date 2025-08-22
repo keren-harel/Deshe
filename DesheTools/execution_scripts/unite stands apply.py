@@ -1620,8 +1620,6 @@ try:
     editor_buckup = arcpy.da.Editor(org_buckup.unitelines.workspace)
     editor_orig.startEditing()
     editor_buckup.startEditing()
-    editor_orig.startOperation()
-    editor_buckup.startOperation()
 
     for lineOID in uniteLines_OIDs:
         arcpy.SetProgressorPosition()
@@ -1651,6 +1649,8 @@ try:
         # Act according to descision value:
         descision = uniteline_fieldValues[60006]
         if descision == '1':
+            editor_orig.startOperation()
+            editor_buckup.startOperation()
             # copy stand to the backup database
             # and update the line's origin stands guid to the new guid
             # from the buckup database.
@@ -1685,8 +1685,7 @@ try:
                 with arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery) as buckup_sc:
                     for buckup_r in buckup_sc:
                         standIDs_new[i] = buckup_r[0]
-                
-                
+                         
                 # CUT-PASTE stand's rows of related tables:
                 for nickname in stands_tables_relationships.keys():
                     # stX - st1, st2, st3, st4
@@ -1733,20 +1732,22 @@ try:
                         arcpy.AddMessage('~deleted~')
                 
             # UPDATE unite line with backup stand IDs:
-            
             unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
             with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
                 for unitelines_r in unitelines_uc:
                     # update the row with the new buckup stand IDs
                     unitelines_r[0] = standIDs_new[0]
                     unitelines_r[1] = standIDs_new[1]
-                    unitelines_uc.updateRow(unitelines_r)
                     # update the line's status to None (null)
                     unitelines_r[2] = None
+                    unitelines_uc.updateRow(unitelines_r)
                     arcpy.AddMessage('updated unite line with new buckup stand IDs')
-    # Explicitly save changes
-    editor_orig.stopOperation()
-    editor_buckup.stopOperation()
+            # Explicitly save changes
+            editor_orig.stopOperation()
+            editor_buckup.stopOperation()
+        elif descision == '2':
+            pass
+    # stop editing and save changes:
     editor_orig.stopEditing(True)
     editor_buckup.stopEditing(True)            
 
@@ -1770,23 +1771,3 @@ except Exception as e:
 #arcpy.ClearWorkspaceCache_management(org_buckup.unitelines.workspace)
 
 arcpy.AddMessage("Script finished.")
-
-
-
-
-"""
-uniteLines_uc = arcpy.UpdateCursor(
-    org.unitelines.fullPath,
-    #where_clause = 'OBJECTID = 1', #for debug!!!
-    sort_fields = "%s A" % org.unitelines.oidFieldName
-    )
-#Main iteration:
-for uniteLines_r in uniteLines_uc:
-    arcpy.SetProgressorLabel(tempMessage)
-
-    lineObj = UniteLine(uniteLines_r, org.unitelines)
-    uniteLines_uc.updateRow(lineObj.row)
-
-    arcpy.SetProgressorPosition()
-del uniteLines_uc
-"""
