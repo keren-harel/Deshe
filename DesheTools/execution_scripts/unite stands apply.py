@@ -518,11 +518,13 @@ class Organizer:
         self.stands = FeatureClass(stands)
         self.unitelines = FeatureClass(unitelines)
         self.sekerpoints = FeatureClass(sekerpoints)
+        arcpy.AddMessage('Organizer initialized with:\n- Stands: %s\n- Unitelines: %s\n- Seker points: %s' % (self.stands.fullPath, self.unitelines.fullPath, self.sekerpoints.fullPath))
         #Coordinate system of both FCs must be the same.
-        #self.checkSR([self.stands, self.unitelines, self.sekerpoints])
+        self.checkSR([self.stands, self.unitelines, self.sekerpoints])
         if self.stands.workspace != self.unitelines.workspace:
             arcpy.AddError('Stands and seker points are not in the same workspace.')
-        arcpy.env.workspace = self.stands.workspace
+        #@arcpy.env.workspace = self.stands.workspace
+        arcpy.AddMessage('Workspace: %s' % self.stands.workspace)
         
         self.relationships = {
             #'nickname': RelationshipClass,
@@ -589,8 +591,8 @@ class Organizer:
         Returns arcpy.Describe object of the relationship
         """
         for relationshipName in self.stands.desc.relationshipClassNames:
-            relDesc = arcpy.Describe(relationshipName)
-            destDesc = arcpy.Describe(relDesc.destinationClassNames[0])
+            relDesc = arcpy.Describe(os.path.join(self.stands.workspace, relationshipName))
+            destDesc = arcpy.Describe(os.path.join(self.stands.workspace, relDesc.destinationClassNames[0]))
             if destDesc.datasetType == 'FeatureClass':
                 if destDesc.shapeType == 'Point':
                     return relDesc
@@ -602,7 +604,7 @@ class Organizer:
         return None
 
     def __repr__(self):
-        return 'Organizer object'
+        return 'Organizer object. workspace: %s' % self.stands.workspace
 
     def initBuckupDatabase(self):
         """
@@ -652,41 +654,37 @@ class Organizer:
         bu_input_stands = self.stands.fullPath.replace('.gdb', '_buckup.gdb')
         bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_buckup.gdb')
         bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_buckup.gdb')
+        
+        arcpy.AddMessage(f'bu_stands: {bu_input_stands}')
+        arcpy.AddMessage(f'bu_unitelines: {bu_input_unitelines}')
+        arcpy.AddMessage(f'bu_sekerpoints: {bu_input_sekerpoints}')
 
         newOrg = Organizer(
             bu_input_stands,
             bu_input_unitelines,
             bu_input_sekerpoints,
-            stands_tables_relationships, 
+            stands_tables_relationships,
             sekerpoints_tables_relationships
         )
         # Create references between organizers:
         self.buckupOrganizer = newOrg
         newOrg.buckupOfOrganizer = self
+        arcpy.AddMessage(f'organizer created in workspace: {newOrg.__repr__()}')
         return newOrg
 
 class RelationshipClass:
     def __init__(self, relationshipName, nickname, originFC):
-        self.desc = arcpy.Describe(relationshipName)
+        self.desc = arcpy.Describe(os.path.join(originFC.workspace, relationshipName))
         self.name = self.desc.name
         self.nickname = nickname
         self.fullPath = self.desc.catalogPath
         self.workspace = self.desc.path
         #Check that originFC == relationship class' origin FC:
-        if originFC.fullPath !=  os.path.join(self.desc.workspace.catalogPath, self.desc.originClassNames[0]):
+        if originFC.fullPath !=  os.path.join(self.desc.path, self.desc.originClassNames[0]):
             arcpy.AddError("Origin FCs don't match between sekerpoints and relationship provided.")
         self.origin = originFC
         #Create a pointer to the destination FC here:
-        # Special case: relationship destination FC already exists → 
-        # then use it and do not create a new FC instance.
-        # Solution: check if destination name == unitelines name:
-        if 'org' in globals():
-            if org.unitelines.name == self.desc.destinationClassNames[0]:
-                self.destination = org.unitelines
-            else:
-                self.destination = FeatureClass(self.desc.destinationClassNames[0])
-        else:
-            self.destination = FeatureClass(self.desc.destinationClassNames[0])
+        self.destination = FeatureClass(os.path.join(self.desc.path, self.desc.destinationClassNames[0]))
         #BIND BOTH WAYS to FC objects: origin and destination
         self.origin.relationships[self.nickname] = self
         self.destination.relationships[self.nickname] = self
@@ -1648,13 +1646,8 @@ try:
             # from the buckup database.
             orig_relationship_ls = org.unitelines.relationships['ls']
             orig_FC = orig_relationship_ls.destination
-            fieldNames = [field.name for field in orig_FC.desc.fields]
             buckup_relationship_ls = org_buckup.relationships['ls']
             buckup_FC = buckup_relationship_ls.destination
-            # replace shape field with "SHAPE@"
-            for i, fieldName in enumerate(fieldNames):
-                if fieldName.lower() == 'shape':
-                    fieldNames[i] = 'SHAPE@'
             standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
             standIDs_new = ['', '']
             standID_product = uniteline_fieldValues[60002]
@@ -1662,22 +1655,15 @@ try:
                 origStand_sqlQuery = buildSqlQuery(orig_FC.fullPath,
                                                     orig_relationship_ls.foreignKey_fieldName,
                                                     standID)
+                # Move stand to row buckup gdb:
+                arcpy.AddMessage(f'orig_FC: {orig_FC.fullPath}')
+                arcpy.AddMessage(f'buckup_FC: {buckup_FC.fullPath}')
+                arcpy.management.Append(orig_FC.fullPath, buckup_FC.fullPath, schema_type='TEST', expression=origStand_sqlQuery)
+                # Get the new stand's objectid and globalID:
+                buckup_standID_new = getNewlyCreatedValue(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName)
+                standIDs_new[i] = buckup_standID_new
                 
-                # COPY-PASTE stands - start two cursors:
-                # NOTICE - the original stand is not deleted yet, 
-                # since deleting it prevents locating its related rows by standID.
-                with arcpy.da.SearchCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_sc:
-                    with arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames) as buckup_ic:
-                        for orig_r in orig_sc:
-                            # insert row to the buckup gdb and collect its OBJECTID
-                            buckupObjectid = buckup_ic.insertRow(orig_r)
-                            arcpy.AddMessage('added stand row to buckup gdb - objectid %s' % buckupObjectid)
-                # get the new guid of the buckup stand
-                buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
-                with arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery) as buckup_sc:
-                    for buckup_r in buckup_sc:
-                        standIDs_new[i] = buckup_r[0]
-                
+                """
                 # CUT-PASTE stand's rows of related tables:
                 for nickname in stands_tables_relationships.keys():
                     # stX - st1, st2, st3, st4
@@ -1722,8 +1708,9 @@ try:
                     for orig_r in orig_uc:
                         orig_uc.deleteRow()
                         arcpy.AddMessage('~deleted~')
-            
+                """
             # UPDATE unite line with backup stand IDs:
+            """
             unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
             with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
                 for unitelines_r in unitelines_uc:
@@ -1734,6 +1721,7 @@ try:
                     # update the line's status to None (null)
                     unitelines_r[2] = None
                     arcpy.AddMessage('updated unite line with new buckup stand IDs')
+            """
 
 except arcpy.ExecuteError:
     arcpy.AddError("Script aborted due to an ArcPy execution error.")
