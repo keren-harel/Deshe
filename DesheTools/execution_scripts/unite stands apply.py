@@ -1611,8 +1611,18 @@ arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
 
 # --- Start editing the geodatabase: ---
+# Create an editor object for both databases:
+editor_orig = None
+editor_buckup = None
 
 try:
+    editor_orig = arcpy.da.Editor(org.unitelines.workspace)
+    editor_buckup = arcpy.da.Editor(org_buckup.unitelines.workspace)
+    editor_orig.startEditing()
+    editor_buckup.startEditing()
+    editor_orig.startOperation()
+    editor_buckup.startOperation()
+
     for lineOID in uniteLines_OIDs:
         arcpy.SetProgressorPosition()
         counter = uniteLines_OIDs.index(lineOID)+1
@@ -1646,8 +1656,13 @@ try:
             # from the buckup database.
             orig_relationship_ls = org.unitelines.relationships['ls']
             orig_FC = orig_relationship_ls.destination
+            fieldNames = [field.name for field in orig_FC.desc.fields]
             buckup_relationship_ls = org_buckup.relationships['ls']
             buckup_FC = buckup_relationship_ls.destination
+            # replace shape field with "SHAPE@"
+            for i, fieldName in enumerate(fieldNames):
+                if fieldName.lower() == 'shape':
+                    fieldNames[i] = 'SHAPE@'
             standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
             standIDs_new = ['', '']
             standID_product = uniteline_fieldValues[60002]
@@ -1655,15 +1670,23 @@ try:
                 origStand_sqlQuery = buildSqlQuery(orig_FC.fullPath,
                                                     orig_relationship_ls.foreignKey_fieldName,
                                                     standID)
-                # Move stand to row buckup gdb:
-                arcpy.AddMessage(f'orig_FC: {orig_FC.fullPath}')
-                arcpy.AddMessage(f'buckup_FC: {buckup_FC.fullPath}')
-                arcpy.management.Append(orig_FC.fullPath, buckup_FC.fullPath, schema_type='TEST', expression=origStand_sqlQuery)
-                # Get the new stand's objectid and globalID:
-                buckup_standID_new = getNewlyCreatedValue(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName)
-                standIDs_new[i] = buckup_standID_new
                 
-                """
+                # COPY-PASTE stands - start two cursors:
+                # NOTICE - the original stand is not deleted yet, 
+                # since deleting it prevents locating its related rows by standID.
+                with arcpy.da.SearchCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_sc:
+                    with arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames) as buckup_ic:
+                        for orig_r in orig_sc:
+                            # insert row to the buckup gdb and collect its OBJECTID
+                            buckupObjectid = buckup_ic.insertRow(orig_r)
+                            arcpy.AddMessage('added stand row to buckup gdb - objectid %s' % buckupObjectid)
+                # get the new guid of the buckup stand
+                buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
+                with arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery) as buckup_sc:
+                    for buckup_r in buckup_sc:
+                        standIDs_new[i] = buckup_r[0]
+                
+                
                 # CUT-PASTE stand's rows of related tables:
                 for nickname in stands_tables_relationships.keys():
                     # stX - st1, st2, st3, st4
@@ -1708,9 +1731,9 @@ try:
                     for orig_r in orig_uc:
                         orig_uc.deleteRow()
                         arcpy.AddMessage('~deleted~')
-                """
+                
             # UPDATE unite line with backup stand IDs:
-            """
+            
             unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
             with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
                 for unitelines_r in unitelines_uc:
@@ -1721,13 +1744,26 @@ try:
                     # update the line's status to None (null)
                     unitelines_r[2] = None
                     arcpy.AddMessage('updated unite line with new buckup stand IDs')
-            """
+    # Explicitly save changes
+    editor_orig.stopOperation()
+    editor_buckup.stopOperation()
+    editor_orig.stopEditing(True)
+    editor_buckup.stopEditing(True)            
 
 except arcpy.ExecuteError:
     arcpy.AddError("Script aborted due to an ArcPy execution error.")
+    if editor_orig and editor_orig.isEditing:
+        editor_orig.stopEditing(False) # Discard changes
+    if editor_buckup and editor_buckup.isEditing:
+        editor_buckup.stopEditing(False) # Discard changes
     raise
 except Exception as e:
     arcpy.AddError(f"An unexpected Python error occurred: {e}")
+    if editor_orig and editor_orig.isEditing:
+        editor_orig.stopEditing(False) # Discard changes
+    if editor_buckup and editor_buckup.isEditing:
+        editor_buckup.stopEditing(False) # Discard changes
+
     raise
 
 #arcpy.ClearWorkspaceCache_management(org.unitelines.workspace)
