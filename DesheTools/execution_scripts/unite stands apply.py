@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 
 #TOOL PARAMETERS
-debug_mode = False
+debug_mode = True
 if debug_mode:
     #debug parameters
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
@@ -1571,8 +1571,6 @@ for organizerInspected in [org, org_buckup]:
             arcpy.AddError(f"An unexpected error occurred during lock check: {e}")
             raise # Re-raise to stop the script tool execution
 
-    
-
 #### Process section 3: ####
 # Go through each unite line:
 
@@ -1615,18 +1613,8 @@ arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
 
 # --- Start editing the geodatabase: ---
-# Create an editor object for both databases:
-editor_orig = None
-editor_buckup = None
 
 try:
-    editor_orig = arcpy.da.Editor(org.unitelines.workspace)
-    editor_buckup = arcpy.da.Editor(org_buckup.unitelines.workspace)
-    editor_orig.startEditing()
-    editor_buckup.startEditing()
-    editor_orig.startOperation()
-    editor_buckup.startOperation()
-
     for lineOID in uniteLines_OIDs:
         arcpy.SetProgressorPosition()
         counter = uniteLines_OIDs.index(lineOID)+1
@@ -1746,25 +1734,12 @@ try:
                     # update the line's status to None (null)
                     unitelines_r[2] = None
                     arcpy.AddMessage('updated unite line with new buckup stand IDs')
-    # Explicitly save changes
-    editor_orig.stopOperation()
-    editor_buckup.stopOperation()
-    editor_orig.stopEditing(True)
-    editor_buckup.stopEditing(True)
 
 except arcpy.ExecuteError:
     arcpy.AddError("Script aborted due to an ArcPy execution error.")
-    if editor_orig and editor_orig.isEditing:
-        editor_orig.stopEditing(False) # Discard changes
-    if editor_buckup and editor_buckup.isEditing:
-        editor_buckup.stopEditing(False) # Discard changes
     raise
 except Exception as e:
     arcpy.AddError(f"An unexpected Python error occurred: {e}")
-    if editor_orig and editor_orig.isEditing:
-        editor_orig.stopEditing(False) # Discard changes
-    if editor_buckup and editor_buckup.isEditing:
-        editor_buckup.stopEditing(False) # Discard changes
     raise
 
 #arcpy.ClearWorkspaceCache_management(org.unitelines.workspace)
