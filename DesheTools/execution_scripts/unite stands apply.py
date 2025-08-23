@@ -518,11 +518,11 @@ class Organizer:
         self.stands = FeatureClass(stands)
         self.unitelines = FeatureClass(unitelines)
         self.sekerpoints = FeatureClass(sekerpoints)
-        arcpy.AddMessage('Organizer initialized with:\n- Stands: %s\n- Unitelines: %s\n- Seker points: %s' % (self.stands.fullPath, self.unitelines.fullPath, self.sekerpoints.fullPath))
         #Coordinate system of both FCs must be the same.
         self.checkSR([self.stands, self.unitelines, self.sekerpoints])
         if self.stands.workspace != self.unitelines.workspace:
             arcpy.AddError('Stands and seker points are not in the same workspace.')
+        # changing workspace causes SERIOUS issues - do not uncimment!
         #@arcpy.env.workspace = self.stands.workspace
         arcpy.AddMessage('Workspace: %s' % self.stands.workspace)
         
@@ -569,8 +569,8 @@ class Organizer:
 
         #References of corresponding organizer objects:
         #to be populated later.
-        self.buckupOrganizer = None
-        self.buckupOfOrganizer = None
+        self.backupOrganizer = None
+        self.backupOfOrganizer = None
         
     def checkSR(self, FC_list):
         wkid_list = [fc.desc.spatialReference.factoryCode for fc in FC_list]
@@ -606,23 +606,23 @@ class Organizer:
     def __repr__(self):
         return 'Organizer object. workspace: %s' % self.stands.workspace
 
-    def initBuckupDatabase(self):
+    def initbackupDatabase(self):
         """
-        Identifies a buckup database based on the suffix added to the current database.
+        Identifies a backup database based on the suffix added to the current database.
         """
-        buckupDatabase_suffix = '_buckup'
+        backupDatabase_suffix = '_backup'
         #Get the current database:
         currentDatabase = self.stands.workspace
-        #Get buckup database path:
-        buckupDatabase = currentDatabase.replace('.gdb', buckupDatabase_suffix + '.gdb')
-        buckupDatabase_basename = os.path.basename(buckupDatabase)
-        #Check if the buckup database exists:
-        if not arcpy.Exists(buckupDatabase):
-            buckupDatabase_existed = False
-            #Create the buckup database from the current database scheme:
-            arcpy.AddMessage('Creating a buckup database: %s' % buckupDatabase_basename)
+        #Get backup database path:
+        backupDatabase = currentDatabase.replace('.gdb', backupDatabase_suffix + '.gdb')
+        backupDatabase_basename = os.path.basename(backupDatabase)
+        #Check if the backup database exists:
+        if not arcpy.Exists(backupDatabase):
+            backupDatabase_existed = False
+            #Create the backup database from the current database scheme:
+            arcpy.AddMessage('Creating a backup database: %s' % backupDatabase_basename)
             folderPath = os.path.dirname(currentDatabase)
-            arcpy.management.CreateFileGDB(folderPath, buckupDatabase_basename)
+            arcpy.management.CreateFileGDB(folderPath, backupDatabase_basename)
             # create a scheme file
             schemeFile = os.path.join(folderPath, 'scheme.xml')
             arcpy.management.ExportXMLWorkspaceDocument(
@@ -630,34 +630,30 @@ class Organizer:
                 schemeFile,
                 export_type="SCHEMA_ONLY"
             )
-            # import the scheme file to the buckup database
+            # import the scheme file to the backup database
             arcpy.management.ImportXMLWorkspaceDocument(
-                buckupDatabase,
+                backupDatabase,
                 schemeFile,
                 import_type="SCHEMA_ONLY",
             )
             arcpy.management.Delete(schemeFile)
         else:
-            buckupDatabase_existed = True
-            arcpy.AddMessage('Existing buckup database identified: %s' % buckupDatabase_basename)
-            #@PATCH_TEMPORARY_7.25 - did not validate the existing buckup database scheme
+            backupDatabase_existed = True
+            arcpy.AddMessage('Existing backup database identified: %s' % backupDatabase_basename)
+            #@PATCH_TEMPORARY_7.25 - did not validate the existing backup database scheme
 
-        return buckupDatabase
+        return backupDatabase
 
     def replicate(self):
         """
         Creates a new Organizer object that is a replica of the current one,
-        but with paths modified to point to the buckup database.
+        but with paths modified to point to the backup database.
         * "bu" = backup.
         """
-        # Modify paths to point to the buckup database:
-        bu_input_stands = self.stands.fullPath.replace('.gdb', '_buckup.gdb')
-        bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_buckup.gdb')
-        bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_buckup.gdb')
-        
-        arcpy.AddMessage(f'bu_stands: {bu_input_stands}')
-        arcpy.AddMessage(f'bu_unitelines: {bu_input_unitelines}')
-        arcpy.AddMessage(f'bu_sekerpoints: {bu_input_sekerpoints}')
+        # Modify paths to point to the backup database:
+        bu_input_stands = self.stands.fullPath.replace('.gdb', '_backup.gdb')
+        bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_backup.gdb')
+        bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_backup.gdb')
 
         newOrg = Organizer(
             bu_input_stands,
@@ -667,9 +663,8 @@ class Organizer:
             sekerpoints_tables_relationships
         )
         # Create references between organizers:
-        self.buckupOrganizer = newOrg
-        newOrg.buckupOfOrganizer = self
-        arcpy.AddMessage(f'organizer created in workspace: {newOrg.__repr__()}')
+        self.backupOrganizer = newOrg
+        newOrg.backupOfOrganizer = self
         return newOrg
 
 class RelationshipClass:
@@ -1205,21 +1200,21 @@ class UniteLine(FcRow):
             if descision == '1':
                 # Desicion is '1' - approved for merge
                 # 1) Copy line's origin stands and related tables
-                # from current database to the buckup database.
+                # from current database to the backup database.
                 # 2) Delete origin stands and their related tables. 
                 # 3) Update the line's origin stands guid to the 
-                # new guid from the buckup database.
+                # new guid from the backup database.
                 # 4) Update the line's status to 0 - ממתין להחלטה.
                 # 5) Annex sekerpoints to the new stands.
 
                 # copy stand to the backup database
                 # and update the line's origin stands guid to the new guid
-                # from the buckup database.
+                # from the backup database.
                 orig_relationship_ls = self.FC.relationships['ls']
                 orig_FC = orig_relationship_ls.destination
                 fieldNames = [field.name for field in orig_FC.desc.fields]
-                buckup_relationship_ls = org_buckup.relationships['ls']
-                buckup_FC = buckup_relationship_ls.destination
+                backup_relationship_ls = org_backup.relationships['ls']
+                backup_FC = backup_relationship_ls.destination
                 # replace shape field with "SHAPE@"
                 for i, fieldName in enumerate(fieldNames):
                     if fieldName.lower() == 'shape':
@@ -1233,30 +1228,30 @@ class UniteLine(FcRow):
                                              standID)
                     
                     orig_uc = arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = sqlQuery)
-                    buckup_ic = arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames)
+                    backup_ic = arcpy.da.InsertCursor(backup_FC.fullPath, fieldNames)
                     for orig_r in orig_uc:
-                        # insert row to the buckup gdb and collect the globalID
-                        buckupObjectid = buckup_ic.insertRow(orig_r)
+                        # insert row to the backup gdb and collect the globalID
+                        backupObjectid = backup_ic.insertRow(orig_r)
                         # delete the original stand row
                         orig_uc.deleteRow()
-                    del buckup_ic, orig_uc
+                    del backup_ic, orig_uc
                     if 'orig_r' in locals(): del orig_r
                     # get the new guid
-                    buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
-                    buckup_sc = arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery)
-                    for buckup_r in buckup_sc:
-                        standIDs_new[i] = buckup_r[0]
-                    del buckup_sc
+                    backup_sqlQuery = f'{backup_relationship_ls.destination.oidFieldName} = {backupObjectid}'
+                    backup_sc = arcpy.da.SearchCursor(backup_FC.fullPath, backup_relationship_ls.foreignKey_fieldName, where_clause = backup_sqlQuery)
+                    for backup_r in backup_sc:
+                        standIDs_new[i] = backup_r[0]
+                    del backup_sc
                     
                     
                     # copy stands' rows from related tables
-                    # to the buckup database.
+                    # to the backup database.
                     for nickname in stands_tables_relationships.keys():
                         # stX - st1, st2, st3, st4
                         orig_relationship_stX = org.relationships[nickname]
                         orig_tableX = orig_relationship_stX.destination
-                        buckup_relationship_stX = org_buckup.relationships[nickname]
-                        buckup_tableX = buckup_relationship_stX.destination
+                        backup_relationship_stX = org_backup.relationships[nickname]
+                        backup_tableX = backup_relationship_stX.destination
                         
                         # locate foreignKey_fieldName ('stand_id') field index:
                         fieldNames_table = [field.name for field in orig_tableX.desc.fields]
@@ -1265,16 +1260,16 @@ class UniteLine(FcRow):
                                                  orig_relationship_stX.foreignKey_fieldName,
                                                  standID)
                         orig_uc = arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, where_clause = sqlQuery)
-                        buckup_ic = arcpy.da.InsertCursor(buckup_tableX.fullPath, fieldNames_table)
+                        backup_ic = arcpy.da.InsertCursor(backup_tableX.fullPath, fieldNames_table)
                         for orig_r in orig_uc:
                             # replace the foreignKey field value with the new guid
                             orig_r = list(orig_r)
                             orig_r[foreignKey_index] = standIDs_new[i]
-                            # insert row to the buckup gdb
-                            buckup_ic.insertRow(tuple(orig_r))
+                            # insert row to the backup gdb
+                            backup_ic.insertRow(tuple(orig_r))
                             # delete the original table row
                             orig_uc.deleteRow()
-                        del orig_uc, buckup_ic
+                        del orig_uc, backup_ic
                     
                     # assign sekerpoints to the new stand
                     orig_relationship_sp = org.relationships['sp']
@@ -1291,12 +1286,12 @@ class UniteLine(FcRow):
                     del orig_sekerpoints_uc
 
                 # update the line's origin stands guid to the new guid
-                # from the buckup database.
+                # from the backup database.
                 # update the line's status to None (null).
                 self.writeSelf([60006, 60007, 60008], [None] + standIDs_new)
 
             elif descision == '2':
-                # Desicion is '2' - restore from buckup.
+                # Desicion is '2' - restore from backup.
                 #@PATCH_TEMPORARY_7.25
                 pass
 
@@ -1540,15 +1535,15 @@ message = 'Creating a buck-up database...'
 arcpy.AddMessage(message)
 arcpy.SetProgressor("default",message)and
 """
-org.initBuckupDatabase()
+org.initbackupDatabase()
 
 # Create a new Organizer object for the buck-up database:
-org_buckup = org.replicate()
+org_backup = org.replicate()
 
 #### Process section 2: ####
 # Check for .lock files in the databases:
 lock_pattern = re.compile(r".*\.lock$")
-for organizerInspected in [org, org_buckup]:
+for organizerInspected in [org, org_backup]:
     inspectedDatasets = set()
     for relationship in organizerInspected.relationships.values():
         inspectedDatasets.add(relationship.destination.fullPath)
@@ -1576,7 +1571,7 @@ for organizerInspected in [org, org_buckup]:
 # Collect all datasets that are inspected for locks:
 # This includes both the original and the buck-up databases.
 inspectedDatasets = set()
-for organizerInspected in [org, org_buckup]:
+for organizerInspected in [org, org_backup]:
     for relationship in organizerInspected.relationships.values():
         inspectedDatasets.add(relationship.destination.fullPath)
         inspectedDatasets.add(relationship.origin.fullPath)
@@ -1613,13 +1608,13 @@ arcpy.AddMessage(message)
 # --- Start editing the geodatabase: ---
 # Create an editor object for both databases:
 editor_orig = None
-editor_buckup = None
+editor_backup = None
 
 try:
     editor_orig = arcpy.da.Editor(org.unitelines.workspace)
-    editor_buckup = arcpy.da.Editor(org_buckup.unitelines.workspace)
+    editor_backup = arcpy.da.Editor(org_backup.unitelines.workspace)
     editor_orig.startEditing()
-    editor_buckup.startEditing()
+    editor_backup.startEditing()
 
     for lineOID in uniteLines_OIDs:
         arcpy.SetProgressorPosition()
@@ -1640,25 +1635,25 @@ try:
                 uniteline_fieldValues = {code: unitelines_row[i] for i, code in enumerate(unitelines_fieldCodes)}
         # valid joint condition:
         # stats is 'תקין' and product stand_id is not None.
-        joint_isValid = uniteline_fieldValues[60003] == 'תקין' and uniteline_fieldValues[60002]
+        joint_isValid = uniteline_fieldValues[60003] == 'תקין' and uniteline_fieldValues[60002] and uniteline_fieldValues[60007] is not None and uniteline_fieldValues[60008] is not None
         if not joint_isValid:
             # If the joint is not valid, skip this row.
-            arcpy.AddMessage(f"Skipping Unite Line OID: {lineOID} - Joint is not valid. Check unite line's status or stand id.")
+            arcpy.AddMessage(f"Skipping Unite Line OID: {lineOID} - Joint is not valid. Check unite line's status or its related stand ID attributes.")
             continue
         # Joint is valid.
         # Act according to descision value:
         descision = uniteline_fieldValues[60006]
         if descision == '1':
             editor_orig.startOperation()
-            editor_buckup.startOperation()
+            editor_backup.startOperation()
             # copy stand to the backup database
             # and update the line's origin stands guid to the new guid
-            # from the buckup database.
+            # from the backup database.
             orig_relationship_ls = org.unitelines.relationships['ls']
             orig_FC = orig_relationship_ls.destination
             fieldNames = [field.name for field in orig_FC.desc.fields]
-            buckup_relationship_ls = org_buckup.relationships['ls']
-            buckup_FC = buckup_relationship_ls.destination
+            backup_relationship_ls = org_backup.relationships['ls']
+            backup_FC = backup_relationship_ls.destination
             # replace shape field with "SHAPE@"
             for i, fieldName in enumerate(fieldNames):
                 if fieldName.lower() == 'shape':
@@ -1666,6 +1661,18 @@ try:
             standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
             standIDs_new = ['', '']
             standID_product = uniteline_fieldValues[60002]
+            # CHECK that both stands exist in the original database:
+            bothStands_sqlQuery = f"{orig_relationship_ls.foreignKey_fieldName} IN ('{standIDs_old[0]}', '{standIDs_old[1]}')"
+            stands_count = 0
+            with arcpy.da.SearchCursor(orig_FC.fullPath, 'OID@', where_clause = bothStands_sqlQuery) as sc:
+                for r in sc:
+                    stands_count += 1
+            if not stands_count == 2:
+                # missing one or more stands, 
+                # unable to complete backup - continue to next unite line.
+                warningMessage = f'original gdb is missing at least one stand of the following: {standIDs_old}.'
+                arcpy.AddWarning(warningMessage)
+                continue
             for i, standID in enumerate(standIDs_old):
                 origStand_sqlQuery = buildSqlQuery(orig_FC.fullPath,
                                                     orig_relationship_ls.foreignKey_fieldName,
@@ -1675,24 +1682,23 @@ try:
                 # NOTICE - the original stand is not deleted yet, 
                 # since deleting it prevents locating its related rows by standID.
                 with arcpy.da.SearchCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_sc:
-                    with arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames) as buckup_ic:
+                    with arcpy.da.InsertCursor(backup_FC.fullPath, fieldNames) as backup_ic:
                         for orig_r in orig_sc:
-                            # insert row to the buckup gdb and collect its OBJECTID
-                            buckupObjectid = buckup_ic.insertRow(orig_r)
-                            arcpy.AddMessage('added stand row to buckup gdb - objectid %s' % buckupObjectid)
-                # get the new guid of the buckup stand
-                buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
-                with arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery) as buckup_sc:
-                    for buckup_r in buckup_sc:
-                        standIDs_new[i] = buckup_r[0]
+                            # insert row to the backup gdb and collect its OBJECTID
+                            backupObjectid = backup_ic.insertRow(orig_r)
+                # get the new guid of the backup stand
+                backup_sqlQuery = f'{backup_relationship_ls.destination.oidFieldName} = {backupObjectid}'
+                with arcpy.da.SearchCursor(backup_FC.fullPath, backup_relationship_ls.foreignKey_fieldName, where_clause = backup_sqlQuery) as backup_sc:
+                    for backup_r in backup_sc:
+                        standIDs_new[i] = backup_r[0]
                          
                 # CUT-PASTE stand's rows of related tables:
                 for nickname in stands_tables_relationships.keys():
                     # stX - st1, st2, st3, st4
                     orig_relationship_stX = org.relationships[nickname]
                     orig_tableX = orig_relationship_stX.destination
-                    buckup_relationship_stX = org_buckup.relationships[nickname]
-                    buckup_tableX = buckup_relationship_stX.destination
+                    backup_relationship_stX = org_backup.relationships[nickname]
+                    backup_tableX = backup_relationship_stX.destination
                     
                     # locate foreignKey_fieldName ('stand_id') field index:
                     fieldNames_table = [field.name for field in orig_tableX.desc.fields]
@@ -1701,19 +1707,17 @@ try:
                                                 orig_relationship_stX.foreignKey_fieldName,
                                                 standID)
                     with arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, sqlQuery) as orig_uc:
-                        with arcpy.da.InsertCursor(buckup_tableX.fullPath, fieldNames_table) as buckup_ic:
+                        with arcpy.da.InsertCursor(backup_tableX.fullPath, fieldNames_table) as backup_ic:
                             for orig_r in orig_uc:
                                 # replace the foreignKey field value with the new guid
                                 orig_r = list(orig_r)
                                 orig_r[foreignKey_index] = standIDs_new[i]
-                                # insert row to the buckup gdb
-                                buckup_ic.insertRow(tuple(orig_r))
-                                arcpy.AddMessage('added row to buckup gdb - related table: %s' % orig_tableX.name)
+                                # insert row to the backup gdb
+                                backup_ic.insertRow(tuple(orig_r))
                                 # delete the original table row
                                 orig_uc.deleteRow()
-                                arcpy.AddMessage('deleted row from original gdb - related table: %s' % orig_tableX.name)
 
-                # ASSAIN sekerpoints to the new buckup stand:
+                # ASSIGN sekerpoints to the new product stand:
                 orig_relationship_sp = org.relationships['sp']
                 orig_sekerpointsFC = orig_relationship_sp.destination
                 sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, standID)
@@ -1722,52 +1726,156 @@ try:
                         # replace the foreignKey field value with the new guid
                         orig_sekerpoints_r[0] = standID_product
                         orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
-                        arcpy.AddMessage('updated sekerpoint to buckup stand - sekerpoint: %s' % orig_sekerpoints_r[0])
 
                 # DELETE stand from the original database:
-                arcpy.AddMessage('Deleting original stand: %s' % origStand_sqlQuery)
                 with arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_uc:
                     for orig_r in orig_uc:
                         orig_uc.deleteRow()
-                        arcpy.AddMessage('~deleted~')
                 
             # UPDATE unite line with backup stand IDs:
             unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
             with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
                 for unitelines_r in unitelines_uc:
-                    # update the row with the new buckup stand IDs
+                    # update the row with the new backup stand IDs
                     unitelines_r[0] = standIDs_new[0]
                     unitelines_r[1] = standIDs_new[1]
                     # update the line's status to None (null)
                     unitelines_r[2] = None
                     unitelines_uc.updateRow(unitelines_r)
-                    arcpy.AddMessage('updated unite line with new buckup stand IDs')
-            # Explicitly save changes
+            # stop operation:
             editor_orig.stopOperation()
-            editor_buckup.stopOperation()
+            editor_backup.stopOperation()
         elif descision == '2':
-            pass
-    # stop editing and save changes:
+            editor_orig.startOperation()
+            editor_backup.startOperation()
+            # copy stands from the backup database to original database
+            # and update the line's origin stands guid to the new guid
+            # from the original database.
+            backup_relationship_ls = org_backup.unitelines.relationships['ls']
+            backup_FC = backup_relationship_ls.destination
+            fieldNames = [field.name for field in backup_FC.desc.fields]
+            orig_relationship_ls = org.relationships['ls']
+            orig_FC = orig_relationship_ls.destination
+            # replace shape field with "SHAPE@"
+            for i, fieldName in enumerate(fieldNames):
+                if fieldName.lower() == 'shape':
+                    fieldNames[i] = 'SHAPE@'
+            standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
+            standIDs_new = ['', '']
+            standShapes_new = [None, None]
+            standID_product = uniteline_fieldValues[60002]
+            # CHECK that both stands exist in the backup database:
+            bothStands_sqlQuery = f"{backup_relationship_ls.foreignKey_fieldName} IN ('{standIDs_old[0]}', '{standIDs_old[1]}')"
+            stands_count = 0
+            with arcpy.da.SearchCursor(backup_FC.fullPath, 'OID@', where_clause = bothStands_sqlQuery) as sc:
+                for r in sc:
+                    stands_count += 1
+            if not stands_count == 2:
+                # missing one or more stands, 
+                # unable to complete backup - continue to next unite line.
+                warningMessage = f'backup gdb is missing at least one stand of the following: {standIDs_old}.'
+                arcpy.AddWarning(warningMessage)
+                continue
+            for i, standID in enumerate(standIDs_old):
+                backupStand_sqlQuery = buildSqlQuery(backup_FC.fullPath,
+                                                    backup_relationship_ls.foreignKey_fieldName,
+                                                    standID)
+                
+                # COPY-PASTE stands - start two cursors:
+                # NOTICE - the original stand is not deleted yet, 
+                # since deleting it prevents locating its related rows by standID.
+                with arcpy.da.SearchCursor(backup_FC.fullPath, fieldNames, where_clause = backupStand_sqlQuery) as backup_sc:
+                    with arcpy.da.InsertCursor(orig_FC.fullPath, fieldNames) as orig_ic:
+                        for backup_r in backup_sc:
+                            # insert row to the orig gdb and collect its OBJECTID
+                            origObjectid = orig_ic.insertRow(backup_r)
+                # get the new guid of the orig stand
+                orig_sqlQuery = f'{orig_relationship_ls.destination.oidFieldName} = {origObjectid}'
+                with arcpy.da.SearchCursor(orig_FC.fullPath, [orig_relationship_ls.foreignKey_fieldName, 'SHAPE@'], where_clause = orig_sqlQuery) as orig_sc:
+                    for orig_r in orig_sc:
+                        standIDs_new[i] = orig_r[0]
+                        standShapes_new[i] = orig_r[1]
+                
+                # CUT-PASTE stand's rows of related tables:
+                for nickname in stands_tables_relationships.keys():
+                    # stX - st1, st2, st3, st4
+                    backup_relationship_stX = org_backup.relationships[nickname]
+                    backup_tableX = backup_relationship_stX.destination
+                    orig_relationship_stX = org.relationships[nickname]
+                    orig_tableX = orig_relationship_stX.destination
+                    
+                    # locate foreignKey_fieldName ('stand_id') field index:
+                    fieldNames_table = [field.name for field in backup_tableX.desc.fields]
+                    foreignKey_index = [i for i, field in enumerate(fieldNames_table) if field.lower() == backup_relationship_stX.foreignKey_fieldName.lower()][0]
+                    sqlQuery = buildSqlQuery(backup_tableX.fullPath,
+                                                backup_relationship_stX.foreignKey_fieldName,
+                                                standID)
+                    with arcpy.da.UpdateCursor(backup_tableX.fullPath, fieldNames_table, sqlQuery) as backup_uc:
+                        with arcpy.da.InsertCursor(orig_tableX.fullPath, fieldNames_table) as orig_ic:
+                            for backup_r in backup_uc:
+                                # replace the foreignKey field value with the new guid
+                                backup_r = list(backup_r)
+                                backup_r[foreignKey_index] = standIDs_new[i]
+                                # insert row to the orig gdb
+                                orig_ic.insertRow(tuple(backup_r))
+                                # delete the original table row
+                                backup_uc.deleteRow()
+
+                # ASSIGN sekerpoints to the source stands:
+                orig_relationship_sp = org.relationships['sp']
+                orig_sekerpointsFC = orig_relationship_sp.destination
+                sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, standID_product)
+                with arcpy.da.UpdateCursor(orig_sekerpointsFC.fullPath, [orig_relationship_sp.foreignKey_fieldName, "SHAPE@"], sekerpoints_sqlQuery) as orig_sekerpoints_uc:
+                    for orig_sekerpoints_r in orig_sekerpoints_uc:
+                        # check if the sekerpoint is within the new stand shape:
+                        sekerpoint_shape = orig_sekerpoints_r[1]
+                        if sekerpoint_shape.within(standShapes_new[i]):
+                            # replace the foreignKey field value with the new guid
+                            orig_sekerpoints_r[0] = standIDs_new[i]
+                            orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
+                        else:
+                            # the sekerpoint is not within the new stand shape - skip it.
+                            continue
+
+                # DELETE stand from the backup database:
+                with arcpy.da.UpdateCursor(backup_FC.fullPath, fieldNames, where_clause = backupStand_sqlQuery) as backup_uc:
+                    for backup_r in backup_uc:
+                        backup_uc.deleteRow()
+                
+            # UPDATE unite line with orig stand IDs:
+            unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
+            with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
+                for unitelines_r in unitelines_uc:
+                    # update the row with the new backup stand IDs
+                    unitelines_r[0] = standIDs_new[0]
+                    unitelines_r[1] = standIDs_new[1]
+                    # update the line's status to None (null)
+                    unitelines_r[2] = None
+                    unitelines_uc.updateRow(unitelines_r)
+            # stop operation:
+            editor_orig.stopOperation()
+            editor_backup.stopOperation()
+    # stop operation:
     editor_orig.stopEditing(True)
-    editor_buckup.stopEditing(True)            
+    editor_backup.stopEditing(True)            
 
 except arcpy.ExecuteError:
     arcpy.AddError("Script aborted due to an ArcPy execution error.")
     if editor_orig and editor_orig.isEditing:
         editor_orig.stopEditing(False) # Discard changes
-    if editor_buckup and editor_buckup.isEditing:
-        editor_buckup.stopEditing(False) # Discard changes
+    if editor_backup and editor_backup.isEditing:
+        editor_backup.stopEditing(False) # Discard changes
     raise
 except Exception as e:
     arcpy.AddError(f"An unexpected Python error occurred: {e}")
     if editor_orig and editor_orig.isEditing:
         editor_orig.stopEditing(False) # Discard changes
-    if editor_buckup and editor_buckup.isEditing:
-        editor_buckup.stopEditing(False) # Discard changes
+    if editor_backup and editor_backup.isEditing:
+        editor_backup.stopEditing(False) # Discard changes
 
     raise
 
 #arcpy.ClearWorkspaceCache_management(org.unitelines.workspace)
-#arcpy.ClearWorkspaceCache_management(org_buckup.unitelines.workspace)
+#arcpy.ClearWorkspaceCache_management(org_backup.unitelines.workspace)
 
 arcpy.AddMessage("Script finished.")
