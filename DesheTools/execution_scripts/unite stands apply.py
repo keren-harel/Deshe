@@ -10,7 +10,7 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\9.7.2025 - apply\NirEtzion_1111_verification.gdb'
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
     input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
     input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
     input_sekerpoints = os.path.join(input_workspace, 'smy_NirEtzion')
@@ -164,7 +164,7 @@ def fieldsExcelToDict(excelPath, sheet):
     arcpy.management.Delete(tempTableName)
     return outputDict
 
-def buildSqlQuery(featureClass, fieldName, value, mode = "="):
+def buildSqlQuery(featureClass, fieldName, value, mode = "=", wQuote = True):
     """
     Takes:
        featureClass = featureClass path.
@@ -175,10 +175,12 @@ def buildSqlQuery(featureClass, fieldName, value, mode = "="):
     """
     featureClass_workspace = os.path.dirname(arcpy.Describe(featureClass).catalogPath)
     fieldName_delimited = arcpy.AddFieldDelimiters(featureClass_workspace, fieldName)
+    if wQuote:
+        value = f"'{value}'"
     if mode in ("=", "<>"):
-        return """{0} {1} '{2}'""".format(fieldName_delimited, mode, value)
+        return """{0} {1} {2}""".format(fieldName_delimited, mode, value)
     elif mode in ("= timestamp", "<> timestamp"):
-        return """{0} {1} '{2}'""".format(fieldName_delimited, mode, value)
+        return """{0} {1} {2}""".format(fieldName_delimited, mode, value)
     else:
         return ""
 
@@ -195,100 +197,6 @@ def buildSqlQuery_relationship(ralationship, value, mode = "="):
         return """{0} {1} '{2}'""".format(foreignKey_field_delimited, mode, value)
     else:
         return ""
-
-def findNodesAbove(node,val,array):
-    #Appends to array every node that its value is above val.
-    if node.value>val:
-        array.append(node)
-    for child in node.children:
-        findNodesAbove(child,val,array)
-
-def arrayToTree(array, firstNode):
-    for item in array:
-        nodeName = item[0]
-        nodeCode = item[1]
-        altCode = item[2]
-        childrenArray = item[3]
-        newNode = Node(nodeName, nodeCode, altCode)
-        firstNode.add_child(newNode)
-        hasChildren = len(childrenArray) > 0
-        if hasChildren:
-            arrayToTree(childrenArray, newNode)
-
-def createSpeciesDict(rootNode, jsonPath):
-    """
-    Takes:
-    -rootNode <node Object>
-    -JSON file path
-    Traces the root node down all its children and
-    Returns a dictionary as follows:
-    {species code <int>: species name <str>, }
-    plus the key-value of:
-    '__jsonFileName__': 'NAME_OF_JSONfILE.json'
-    """
-    outputDict = {}
-    outputDict['__jsonFileName__'] = os.path.basename(jsonPath)
-    createSpeciesDict_rec(rootNode, outputDict)
-    return outputDict
-
-def createSpeciesDict_rec(node, dic):
-    """
-    An accessory recursive function.
-    """
-    try:
-        code = int(node.codedValue)
-        #print(code)
-        name = node.name
-        dic[code] = name
-    except ValueError as e:
-        #print (node.codedValue, e)
-        pass
-    for child in node.children:
-        createSpeciesDict_rec(child, dic)
-
-def verifyAlternativeNodes(rootNode, speciesDictionary):
-    """
-    Every node under root, that has an alternative code,
-    must have a corresponding node under root.
-    For example, if node with code 1101
-    has alternative code 1100 → make sure 1100 exists.
-    -rootNode: top-most node object.
-    -speciesDictionary: pre-calculated dict of:
-        {codedValue <int>: species name <str>}
-        every KEY represents a self-node that exists
-        in JSON and root.
-    Collects all the nodes without corresponding alternatives,
-    and post them in the program as Error.
-    """
-    nodesWithAlternative = findNodesWithAlternative(rootNode)
-    nodesWithoutTarget = []
-    for node in nodesWithAlternative:
-        if not int(node.altCode) in speciesDictionary.keys():
-            nodesWithoutTarget.append(node)
-    
-    if nodesWithoutTarget:
-        #for every node add a warning,
-        #at the end ad an error in order to crash.
-        warning = 'JSON file problems: could not find alternative codes:'
-        arcpy.AddWarning(warning)
-        for node in nodesWithoutTarget:
-            warning = "-species %s %s: didn not find code %s" \
-            % (node.codedValue, node.name, node.altCode)
-            arcpy.AddWarning(warning)
-        arcpy.AddError("Please fix JSON file, see details in the warnings above.")
-
-def findNodesWithAlternative_rec(node, array):
-    #Appends to array every node that has an alternative code.
-    if node.hasAlternative():
-        array.append(node)
-    for child in node.children:
-        findNodesWithAlternative_rec(child, array)
-
-def findNodesWithAlternative(rootNode):
-    #Returns a list of nodes with alternative codes.
-    arr = []
-    findNodesWithAlternative_rec(rootNode, arr)
-    return arr
 
 def createRelation(originFC, originKey, destinationFC, destinationKey):
         """
@@ -370,88 +278,6 @@ def createBlankField(FC, smallFieldObj):
             field_alias = smallFieldObj.alias,
             field_domain = smallFieldObj.domain
             )
-
-def moveFieldToEnd(FC, targetField, referenceField):
-    """
-    Takes a field that already exists and re-creates it in the last
-    position in the same feature class, conserving its values.
-    -FC: the FC on which the function runs.
-    -targetField: smallfield object of the field to be moved.
-    -referenceField: smallfield object of the field upoun which
-                     the join will be based.
-    """
-    FC_fieldnames = [field.name.lower() for field in FC.desc.fields]
-
-    fieldExists = targetField.name.lower() in FC_fieldnames
-    if fieldExists:
-        #1)Table to table:
-        #create field mappings:
-        fms = arcpy.FieldMappings()
-
-        #reference field:
-        fm_r = arcpy.FieldMap()
-        #check if field exists:
-        if referenceField.name.lower() not in FC_fieldnames:
-            #field won't be found, so post an ERROR:
-            errorMessage = 'Could not move field. Table: %s does not have field: %s'\
-            % (FC.name, referenceField.name)
-            arcpy.AddError(errorMessage)
-            return
-        fm_r.addInputField(FC.fullPath, referenceField.name)
-        #if the reference field is of 'globalid' type:
-        #→change it into String.
-        if fm_r.outputField.type.lower() == 'globalid':
-            outField = fm_r.outputField
-            outField.type = 'String'
-            fm_r.outputField = outField
-            del outField
-        
-        #target field:
-        fm_t = arcpy.FieldMap()
-        #check if field exists:
-        if targetField.name.lower() not in FC_fieldnames:
-            #field won't be found, so post an ERROR:
-            errorMessage = 'Could not move field. Table: %s does not have field: %s'\
-            % (FC.name, targetField.name)
-            arcpy.AddError(errorMessage)
-            return
-        fm_t.addInputField(FC.fullPath, targetField.name)
-        #alias name must be set specifically:
-        outField = fm_t.outputField
-        outField.aliasName = targetField.alias
-        fm_t.outputField = outField
-        del outField
-
-        fms.addFieldMap(fm_r)
-        fms.addFieldMap(fm_t)
-
-        arcpy.TableToTable_conversion(
-            FC.fullPath,
-            'in_memory',
-            'temp',
-            field_mapping = fms
-        )
-        temptable = os.path.join('in_memory', 'temp')
-
-        arcpy.management.DeleteField(FC.fullPath, targetField.name)
-
-        arcpy.management.JoinField(
-            in_data= FC.fullPath,
-            in_field= referenceField.name,
-            join_table= temptable,
-            join_field= referenceField.name,
-            fields= targetField.name,
-            fm_option= "NOT_USE_FM",
-            field_mapping= None
-        )
-
-        arcpy.management.Delete(temptable)
-        return
-    
-    else:
-        #The field does not exist, create it blank:
-        createBlankField(FC, targetField)
-        return
 
 def getFeatureCount(feature):
     return int(arcpy.management.GetCount(feature)[0])
@@ -613,41 +439,30 @@ def isOrIsChildOf_code(inputNode, inputCode):
     else:
         return False
 
-def findNode_rec(node, codedValue, array):
-    #Appends to array every node that its coded value == the one
-    #provided as variable.
-    if node.codedValue == codedValue:
-        array.append(node)
-    for child in node.children:
-        findNode_rec(child, codedValue, array)
+def getNewlyCreatedValue(fc, fieldName):
+    """
+    Returns the value of the fieldName of the last row created,
+    sorted by the highest objectID.
+    """
+    maxID = 0
+    outVal = None
+    with arcpy.da.SearchCursor(fc, ['OID@', fieldName]) as sc:
+        for r in sc:
+            if r[0] > maxID:
+                maxID = r[0]
+                outVal = r[1]
+    return outVal
 
-def findNode(rootNode, codedValue):
-    #Returns the first node encountered that has the same codedValue.
-    arr = []
-    findNode_rec(rootNode, codedValue, arr)
-    if arr:
-        return arr[0]
-    else:
-        #none found - return an empty node.
-        return Node()
-
-def findNodeByName_rec(node, name, array):
-    #Appends to array every node that its name  == the one
-    #provided as variable.
-    if node.name == name:
-        array.append(node)
-    for child in node.children:
-        findNodeByName_rec(child, name, array)
-
-def findNodeByName(rootNode, name):
-    #Returns the first node encountered that has the same name.
-    arr = []
-    findNodeByName_rec(rootNode, name, arr)
-    if arr:
-        return arr[0]
-    else:
-        #none found - return an empty node.
-        return Node()
+def getMaxValue(fc, fieldName):
+    """
+    Returns the maximum value of the fieldName in the feature class.
+    """
+    maxVal = 0
+    with arcpy.da.SearchCursor(fc, fieldName) as sc:
+        for r in sc:
+            if r[0] > maxVal:
+                maxVal = r[0]
+    return maxVal
 
 #CLASSES
 class FeatureClass:
@@ -707,7 +522,9 @@ class Organizer:
         self.checkSR([self.stands, self.unitelines, self.sekerpoints])
         if self.stands.workspace != self.unitelines.workspace:
             arcpy.AddError('Stands and seker points are not in the same workspace.')
-        arcpy.env.workspace = self.stands.workspace
+        # changing workspace causes SERIOUS issues - do not uncimment!
+        #@arcpy.env.workspace = self.stands.workspace
+        arcpy.AddMessage('Workspace: %s' % self.stands.workspace)
         
         self.relationships = {
             #'nickname': RelationshipClass,
@@ -752,8 +569,8 @@ class Organizer:
 
         #References of corresponding organizer objects:
         #to be populated later.
-        self.buckupOrganizer = None
-        self.buckupOfOrganizer = None
+        self.backupOrganizer = None
+        self.backupOfOrganizer = None
         
     def checkSR(self, FC_list):
         wkid_list = [fc.desc.spatialReference.factoryCode for fc in FC_list]
@@ -774,8 +591,8 @@ class Organizer:
         Returns arcpy.Describe object of the relationship
         """
         for relationshipName in self.stands.desc.relationshipClassNames:
-            relDesc = arcpy.Describe(relationshipName)
-            destDesc = arcpy.Describe(relDesc.destinationClassNames[0])
+            relDesc = arcpy.Describe(os.path.join(self.stands.workspace, relationshipName))
+            destDesc = arcpy.Describe(os.path.join(self.stands.workspace, relDesc.destinationClassNames[0]))
             if destDesc.datasetType == 'FeatureClass':
                 if destDesc.shapeType == 'Point':
                     return relDesc
@@ -787,25 +604,25 @@ class Organizer:
         return None
 
     def __repr__(self):
-        return 'Organizer object'
+        return 'Organizer object. workspace: %s' % self.stands.workspace
 
-    def initBuckupDatabase(self):
+    def initbackupDatabase(self):
         """
-        Identifies a buckup database based on the suffix added to the current database.
+        Identifies a backup database based on the suffix added to the current database.
         """
-        buckupDatabase_suffix = '_buckup'
+        backupDatabase_suffix = '_backup'
         #Get the current database:
         currentDatabase = self.stands.workspace
-        #Get buckup database path:
-        buckupDatabase = currentDatabase.replace('.gdb', buckupDatabase_suffix + '.gdb')
-        buckupDatabase_basename = os.path.basename(buckupDatabase)
-        #Check if the buckup database exists:
-        if not arcpy.Exists(buckupDatabase):
-            buckupDatabase_existed = False
-            #Create the buckup database from the current database scheme:
-            arcpy.AddMessage('Creating a buckup database: %s' % buckupDatabase_basename)
+        #Get backup database path:
+        backupDatabase = currentDatabase.replace('.gdb', backupDatabase_suffix + '.gdb')
+        backupDatabase_basename = os.path.basename(backupDatabase)
+        #Check if the backup database exists:
+        if not arcpy.Exists(backupDatabase):
+            backupDatabase_existed = False
+            #Create the backup database from the current database scheme:
+            arcpy.AddMessage('Creating a backup database: %s' % backupDatabase_basename)
             folderPath = os.path.dirname(currentDatabase)
-            arcpy.management.CreateFileGDB(folderPath, buckupDatabase_basename)
+            arcpy.management.CreateFileGDB(folderPath, backupDatabase_basename)
             # create a scheme file
             schemeFile = os.path.join(folderPath, 'scheme.xml')
             arcpy.management.ExportXMLWorkspaceDocument(
@@ -813,65 +630,56 @@ class Organizer:
                 schemeFile,
                 export_type="SCHEMA_ONLY"
             )
-            # import the scheme file to the buckup database
+            # import the scheme file to the backup database
             arcpy.management.ImportXMLWorkspaceDocument(
-                buckupDatabase,
+                backupDatabase,
                 schemeFile,
                 import_type="SCHEMA_ONLY",
             )
             arcpy.management.Delete(schemeFile)
         else:
-            buckupDatabase_existed = True
-            arcpy.AddMessage('Existing buckup database identified: %s' % buckupDatabase_basename)
-            #@PATCH_TEMPORARY_7.25 - did not validate the existing buckup database scheme
+            backupDatabase_existed = True
+            arcpy.AddMessage('Existing backup database identified: %s' % backupDatabase_basename)
+            #@PATCH_TEMPORARY_7.25 - did not validate the existing backup database scheme
 
-        return buckupDatabase
+        return backupDatabase
 
     def replicate(self):
         """
         Creates a new Organizer object that is a replica of the current one,
-        but with paths modified to point to the buckup database.
+        but with paths modified to point to the backup database.
         * "bu" = backup.
         """
-        # Modify paths to point to the buckup database:
-        bu_input_stands = self.stands.fullPath.replace('.gdb', '_buckup.gdb')
-        bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_buckup.gdb')
-        bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_buckup.gdb')
+        # Modify paths to point to the backup database:
+        bu_input_stands = self.stands.fullPath.replace('.gdb', '_backup.gdb')
+        bu_input_unitelines = self.unitelines.fullPath.replace('.gdb', '_backup.gdb')
+        bu_input_sekerpoints = self.sekerpoints.fullPath.replace('.gdb', '_backup.gdb')
 
         newOrg = Organizer(
             bu_input_stands,
             bu_input_unitelines,
             bu_input_sekerpoints,
-            stands_tables_relationships, 
+            stands_tables_relationships,
             sekerpoints_tables_relationships
         )
         # Create references between organizers:
-        self.buckupOrganizer = newOrg
-        newOrg.buckupOfOrganizer = self
+        self.backupOrganizer = newOrg
+        newOrg.backupOfOrganizer = self
         return newOrg
 
 class RelationshipClass:
     def __init__(self, relationshipName, nickname, originFC):
-        self.desc = arcpy.Describe(relationshipName)
+        self.desc = arcpy.Describe(os.path.join(originFC.workspace, relationshipName))
         self.name = self.desc.name
         self.nickname = nickname
         self.fullPath = self.desc.catalogPath
         self.workspace = self.desc.path
         #Check that originFC == relationship class' origin FC:
-        if originFC.fullPath !=  os.path.join(self.desc.workspace.catalogPath, self.desc.originClassNames[0]):
+        if originFC.fullPath !=  os.path.join(self.desc.path, self.desc.originClassNames[0]):
             arcpy.AddError("Origin FCs don't match between sekerpoints and relationship provided.")
         self.origin = originFC
         #Create a pointer to the destination FC here:
-        # Special case: relationship destination FC already exists → 
-        # then use it and do not create a new FC instance.
-        # Solution: check if destination name == unitelines name:
-        if 'org' in globals():
-            if org.unitelines.name == self.desc.destinationClassNames[0]:
-                self.destination = org.unitelines
-            else:
-                self.destination = FeatureClass(self.desc.destinationClassNames[0])
-        else:
-            self.destination = FeatureClass(self.desc.destinationClassNames[0])
+        self.destination = FeatureClass(os.path.join(self.desc.path, self.desc.destinationClassNames[0]))
         #BIND BOTH WAYS to FC objects: origin and destination
         self.origin.relationships[self.nickname] = self
         self.destination.relationships[self.nickname] = self
@@ -968,1075 +776,6 @@ class Layer:
         self.speciesNames = []
     def __repr__(self):
         return "Empty layer object"
-
-class ForestLayer(Layer):
-    """
-    A layer that is built based on calculated fields of product polygon,
-    and holds their attributes:
-    - layer
-    - cover
-    - veg form
-    - species #@suspended
-    Queries the sekerpoint's attributes a desired layer.
-    Input parameters:
-    - parent - a ProductPolygon object (parent).
-    - layerNum - 4 / 3 / 2 <int> (tmira, high, mid. respectively).
-    """
-    def __init__(self, parent, layerNum):
-        Layer.__init__(self, parent)
-        self.isForestLayer = True
-        self.layerNum = layerNum
-        if self.layerNum not in [2,3,4]:
-            raise Exception('Invalid layerNum inserted: %s' % self.layerNum)
-        self.layerShortText = layerToShortText[self.layerNum]
-        self.layerLongText = layerToLongText[self.layerNum]
-        self.layerLongText_m = layerToLongText_m[self.layerNum]
-        stepName = '%s forest layer creation' % self.layerShortText
-
-        #Import values from sekerpoint
-        #fieldsList = [vegForm, layerCover, species]
-        fieldLists = {
-            4: [50046, 50047, 50048],
-            3: [50050, 50051, 50052],
-            2: [50054, 50055, 50056],
-        }
-        fieldsList = fieldLists[self.layerNum]
-        #query
-        rawValues = self.parent.getSelfValue(fieldsList)
-
-        #3 raw values: [vegForm, layerCover, species]
-        self.vegForm = rawValues[0]
-        self.vegForm_translated = translate(self.vegForm, subForestVegForm_translation)
-        self.layerCover = rawValues[1]
-        speciesCodes_raw = rawValues[2]
-
-        #validation and elaboration of values:
-        #A counter of valid tests passed:
-        validationConditionsMet = 0
-        #1) Validation of layercover:
-        try:
-            layerCover_tup = layerCover_table1[self.layerCover]
-            self.layerCover_num = layerCover_tup[0]
-            self.layerCover_avg = layerCover_tup[1]
-        except KeyError as e:
-            #self.layerCover is not a valid value.
-            key = e.args[0]
-            if key not in ['', None]:
-                #self.layerCover is not one of .keys() nor is "" / None:
-                layerCover_validValues = list(layerCover_table1.keys())
-                layerCover_validValues += [None, '']
-                txt = 'Point %s: %s. Layer cover value (%s) not one of the following: %s.'\
-                    % (self.parent.FC.oidFieldName, self.parent.id, key, layerCover_validValues)
-                self.parent.notifier.add(stepName, 'warning', txt)
-        else:
-            validationConditionsMet += 1
-        
-        #2) Validation of species:
-        #@ suspended
-        validationConditionsMet += 1
-        """
-        if hasattr(speciesCodes_raw, 'split') and speciesCodes_raw != '':
-            #speciesCodes_raw can be splitted.
-            #split and iterate:
-            speciesCodes_split = speciesCodes_raw.split(',')
-            #remove unwanted ' ' spaces from all splitValues:
-            speciesCodes_split = [splitVal.replace(' ', '') for splitVal in speciesCodes_split]
-            for splitVal in speciesCodes_split:
-                try:
-                    #try to match every code to its complement species name:
-                    speciesCode = int(splitVal)
-                    speciesName = speciesDict[speciesCode]
-                except ValueError:
-                    #splitVal is not intable.
-                    continue
-                except KeyError as e:
-                    #Species code: not found in speciesDict.
-                    #Notifty and move on to next splitVal.
-                    key = e.args[0]
-                    txt = 'Point %s: %s. Species code value (%s) is not found in: "%s".'\
-                        % (self.parent.FC.oidFieldName, self.parent.id, key, speciesDict['__jsonFileName__'])
-                    self.parent.notifier.add(stepName, 'warning', txt)
-                    continue
-                else:
-                    #Conditions are met:
-                    #-splitVal is intable.
-                    #-species code is in species dict.
-                    self.speciesCodes.append(speciesCode)
-                    self.speciesNames.append(speciesName)
-        #End of validating and elaborating species. Check what came out:
-        if self.speciesCodes:
-            #e.g., len > 0
-            validationConditionsMet += 1
-        """
-        
-        #3) Validation of vegform: (similar to species)
-        try:
-            vegForm_split = self.vegForm.split(',')
-
-            #remove strings from vegForm_split list:
-            valuesToRemove = ['', ' ']
-            for valueToRemove in valuesToRemove:
-                while valueToRemove in vegForm_split: 
-                    vegForm_split.remove(valueToRemove)
-
-            vegForm_possibleValues = forestVegFormCoordinator.inputOptions
-            #Check every splitvalue is one of the available options:
-            for splitVal in vegForm_split:
-                if splitVal not in vegForm_possibleValues:
-                    txt = 'Veg form value (%s) is invalid.' % splitVal
-                    self.parent.notifier.add(stepName, 'warning', txt)
-
-            #Proceed according to lenght of list:
-            if len(vegForm_split) == 0:
-                self.vegForm = None
-                self.vegForm_translated = None
-                self.vegForms = []
-            elif len(vegForm_split) == 1:
-                #(practicly, same as self.vegForm)
-                self.vegForm = vegForm_split[0]
-                self.vegForm_translated = translate(self.vegForm, subForestVegForm_translation)
-                self.vegForms = [self.vegForm]
-            elif len(vegForm_split) == 2:
-                #Edit the vegform that was previously raw:
-                self.vegForm = forestVegFormCoordinator.solve(vegForm_split)
-                self.vegForm_translated = translate(self.vegForm, subForestVegForm_translation)
-                self.vegForms = vegForm_split
-            elif len(vegForm_split) > 2:
-                #Notify
-                vegForm_fieldObj = fieldsDict[fieldsList[0]]
-                txt = 'Veg form field [%s,%s] has more than 2 values: %s. Process continued with the first two vegforms only. Removing other values from table.' \
-                    % (vegForm_fieldObj.name, vegForm_fieldObj.alias, vegForm_split)
-                self.parent.notifier.add(stepName, 'warning', txt)
-                #Solve matrix for the first two veg forms:
-                vegForm_split_trimmed = vegForm_split[:2]
-                self.vegForm = forestVegFormCoordinator.solve(vegForm_split_trimmed)
-                self.vegForm_translated = translate(self.vegForm, subForestVegForm_translation)
-                self.vegForms = vegForm_split_trimmed
-
-                #Update row values from "A,B,C" to "A,B" (leave the first two).
-                vegForm_joined = ','.join(vegForm_split_trimmed)
-                rawValues[0] = vegForm_joined
-                self.parent.writeSelf(fieldsList[0], vegForm_joined)
-
-        except AttributeError:
-            #AttributeError is when 'NoneType' object has no attribute 'split'
-            # self.vegForm
-            self.vegForm = None
-            self.vegForm_translated = None
-            self.vegForms = []
-        else:
-            #Validates according to self.vegForm:
-            if self.vegForm:
-                validationConditionsMet += 1
-
-        #end of validation, valid only if passed 3 tests:
-        if validationConditionsMet == 3:
-            self.isValid = True
-
-        return
-
-    def asText(self):
-        return "Layer object. Desc: %s." % self.layerDesc
-
-    def __repr__(self):
-        #return self.asText()
-        validity = {True:'valid',False:'invalid'}[self.isValid]
-        return "Layer object: %s [%s]." % (self.layerShortText, validity)
-
-class SubForestLayer(Layer):
-    """
-    Except layer num, short and long text, this layer
-    does not have any stand-alone values (cover and veg form).
-    Instead, this sub-forest layer will be given the remaining 
-    values (cover and veg form) only if it had been classified
-    as a primary or secondary layer for the point (during the
-    process of c__logiclayers()). In that case, the enhance
-    method handles cover and veg form attributes.
-    """
-    def __init__(self, parent, layerNum = 1):
-        Layer.__init__(self, parent)
-        self.layerNum = layerNum
-        self.layerShortText = layerToShortText[self.layerNum]
-        self.layerLongText = layerToLongText[self.layerNum]
-        self.layerLongText_m = layerToLongText_m[self.layerNum]
-        stepName = 'subforest layer creation'
-
-        #Obtain values:
-        self.presenceConifer = self.parent.getSelfValue(50063)
-        self.presenceConiferType = self.parent.getSelfValue(50064)
-        self.presenceBroadLeaf = self.parent.getSelfValue(50065)
-        self.presenceBroadLeafType = self.parent.getSelfValue(50066)
-
-        #subForestCover is a dict of {type: percent <int> or <None>}
-        self.subForestCover = self.subForestCover()
-
-        #Calculate variables for logic:
-        self.isConiferForest = self.coniferForest()
-        self.isBroadleafForest = self.broadleafForest()
-        self.isRiverbank = self.hasRiverbank()
-        self.hasShrubOrGrassCover = self.hasShrubOrGrass()
-
-        #Check subforest layer validity:
-        #   Check if at least one of 3 conditions matches.
-        #   תנאי -או.
-        booleanArrayForValidation = [
-            #האם השכבה מקיימת תנאים של התחדשות מחטני או רחבי עלים
-            self.isConiferForest or self.isBroadleafForest,
-            #האם השכבה מקיימת תנאים של צומח גדות נחלים
-            self.isRiverbank,
-            #האם השכבה מקיימת תנאים של צומח מתוך 3 אופציות לפחות 10
-            self.hasShrubOrGrassCover
-        ]
-        self.isValid = True in booleanArrayForValidation
-
-    def subForestCover(self):
-        """
-        A helper method for organizing data of sub forest cover
-        from related table.
-        Returns a dict of {type: percent <int>}.
-        """
-        outdict = {k:None for k in subCoverType_domain}
-        """
-        #this is what the above does:
-        outdict = {
-            "שיחים": None,
-            "בני_שיח": None,
-            "עשבוני": None,
-            "עצים": None,
-            "ללא_כיסוי": None
-        }
-        """
-        relatedValues = self.parent.getRelatedValues('st2',[52001, 52002])
-        for subPlantType, subPlantPercent in relatedValues:
-            #Handle values of subPlantPercent and convert to integer.
-            if subPlantPercent in [None, "", "0%"]:
-                subPlantPercent = 0
-            else:
-                subPlantPercent = int(subPlantPercent.replace("%",""))
-
-            #Assign values into outdict.
-            if subPlantType in outdict.keys():
-                if outdict[subPlantType] == None:
-                    #e.g: if it is the first time a value is given.
-                    #turn it to zero in order to add.
-                    outdict[subPlantType] = 0
-                outdict[subPlantType] += subPlantPercent
-            elif type(subPlantPercent) is int:
-                #Any other category subPlantType including None
-                #Then just add it to "ללא_כיסוי":
-                if outdict["ללא_כיסוי"] == None:
-                    #e.g: if it is the first time a value is given.
-                    #turn it to zero in order to add.
-                    outdict["ללא_כיסוי"] = 0
-                outdict["ללא_כיסוי"] += subPlantPercent
-
-        #correction from Achiad's e-mail in Aug 14th, 2022:
-        #add cover of TREES → to → shrub (שיחים)
-        if outdict[subCoverType_domain[3]]:
-            #עצים value is not 0 or None.
-            if outdict[subCoverType_domain[0]] == None:
-                outdict[subCoverType_domain[0]] = outdict[subCoverType_domain[3]] # +0
-            elif type(outdict[subCoverType_domain[0]]) is int:
-                outdict[subCoverType_domain[0]] += outdict[subCoverType_domain[3]]
-        return outdict
-
-    def coniferForest(self):
-        #Returns True if sub forest conifer forest meets criteria.
-        #Convert presenceConifer to index based on domain,
-        #obtain threshold based on presenceConiferType.
-        index = presenceConifer_domain.index(self.presenceConifer)
-        if self.presenceConiferType in presenceConifer_threshold.keys():
-            threshold = presenceConifer_threshold[self.presenceConiferType]
-            return index >= threshold
-        else:
-            return False
-
-    def broadleafForest(self):
-        #Returns True if sub forest broadleaf forest meets criteria.
-        #Convert presenceBroadLeaf to index based on domain,
-        #obtain threshold based on presenceBroadLeafType.
-        index = presenceBroadleaf_domain.index(self.presenceBroadLeaf)
-        if self.presenceBroadLeafType in presenceBroadleaf_threshold.keys():
-            threshold = presenceBroadleaf_threshold[self.presenceBroadLeafType]
-            return index >= threshold
-        else:
-            return False
-
-    def hasRiverbank(self):
-        #Returns true if at least a single plant mentioned in fields
-        #"subTreeSp_names", "subShrubSp_names" is a riverside plant (from a list).
-        #1.9.2022: riverbankSpecies is empty, costumer requested to skip this 
-        #          step and return False
-        return False
-        """
-        subTreeSp_names = self.subTreeSp_names
-        subShrubSp_names = self.subShrubSp_names
-        #Correct values: None to "" string:
-        if subTreeSp_names is None:
-            subTreeSp_names = ""
-        if subShrubSp_names is None:
-            subShrubSp_names = ""
-        subSpecies = subTreeSp_names.split(",") + subShrubSp_names.split(",")
-        for sp in subSpecies:
-            if sp in riverbankSpecies:
-                return True
-        return False
-        """
-
-    def hasShrubOrGrass(self):
-        #Returns True if שיחים / בני שיח / עשבוניים cover is >= 10.
-        #TRY/EXCEPT statement for creating the variable if doesn't exist.
-        try:
-            self.subForestCover
-        except AttributeError:
-            #it doesn't exist, so create it.
-            self.subForestCover = self.subForestCover()
-        for coverType in subCoverType_domain[:3]:
-            #Check if a value was inserted:
-            if self.subForestCover[coverType] is None: continue
-            #Check values for the first THREE types:
-            #Return True if any of the values is >= 10.
-            if self.subForestCover[coverType] >= 10:
-                return True
-        return False
-
-    def __repr__(self):
-        #return self.asText()
-        validity = {True:'valid',False:'invalid'}[self.isValid]
-        return "Layer object: %s [%s]." % (self.layerShortText, validity)
-
-class LayerResult(Layer):
-    """
-    A rerult object to help hold information with the method
-    'c__logiclayers()' in standPolygon class.
-    """
-    def __init__(self):
-        Layer.__init__(self, None)
-        self.assigned = False
-
-    def assignLayer(self, layer, isPrimary):
-        self.assigned = True
-        self.isPrimary = isPrimary
-        self.layerNum = layer.layerNum
-        if self.layerNum in [4,3,2]:
-            self.isForestLayer = True
-        self.layerShortText = layerToShortText[self.layerNum]
-        self.layerLongText = layerToLongText[self.layerNum]
-        self.layerLongText_m = layerToLongText_m[self.layerNum]
-        
-        self.layerCover = layer.layerCover
-        self.layerCover_num = layerCover_table1[self.layerCover][0]
-        self.layerCover_avg = layerCover_table1[self.layerCover][1]
-
-        self.vegForm = layer.vegForm
-        self.vegForm_translated = layer.vegForm_translated
-
-    def assign(self, layerNum, cover):
-        self.assigned = True
-
-        self.layerNum = layerNum
-        if self.layerNum in [4,3,2]:
-            self.isForestLayer = True
-        self.layerShortText = layerToShortText[layerNum]
-        self.layerLongText = layerToLongText[layerNum]
-        self.layerLongText_m = layerToLongText_m[layerNum]
-        
-        self.layerCover = cover
-        self.layerCover_num = layerCover_table1[cover][0]
-        self.layerCover_avg = layerCover_table1[cover][1]
-    
-    def setVegForm(self, vegForm):
-        self.vegForm = vegForm
-        self.vegForm_translated = translate(vegForm, subForestVegForm_translation)
-        self.vegForms = [vegForm]
-
-    def createDesc(self):
-        descTxt = "%s %s %s" % (
-                    self.vegForm,
-                    self.layerLongText_m,
-                    self.layerCover,
-                )
-        self.layerDesc = descTxt
-    
-    def finalize(self):
-        #1) validate:
-        if None not in [self.vegForm, self.layerLongText, self.layerCover]:
-            #That means that both methods (setVegForm & assign) performed.
-            self.isValid = True
-        #2) create description:
-        if self.isValid:
-            self.createDesc()
-
-    def getValuesToWrite(self):
-        #Returns a list of values to be used when writing
-        #the results into stand polygon fields.
-        #Values are in the following order:
-        #[forest layer, veg form transtaled, layer cover, layer desc]
-        #exactly like ther appear in fieldCodes in
-        #calculateAndWrite() method.
-        if self.isValid:
-            return [
-                self.layerLongText,
-                self.vegForm_translated,
-                self.layerCover,
-                self.layerDesc
-            ]
-        else:
-            #This layer is not valid, write 'אין' in all 4 fields:
-            return ['אין']*4
-
-    def __repr__(self):
-        #return self.asText()
-        validity = {True:'valid',False:'invalid'}[self.isValid]
-        return "LayerResult object: %s [%s]." % (self.layerDesc, validity)
-
-class CovtypeResult:
-    #A reciprocal object for SpeciesCompositionResult (classification_may2022_v2.py).
-    #can be used as an empty placeholder
-    def __init__(self, standPolygon = None, speciesComp_matrixObj = None, vegForms_matrixObj = None):
-        self.standPolygon = standPolygon
-        self.speciesComp_matrixObj = speciesComp_matrixObj
-        self.vegForms_matrixObj = vegForms_matrixObj
-        self.mode = None
-        self.assigned = False
-        self.converted = False
-        self.singleNode = Node()
-        self.doubleNode = []
-        #Two values to be used as output:
-        self.str = ""
-        self.code = None
-        
-    def assignStudy(self):
-        self.mode = "study"
-        self.assigned = True
-        self.str = "מחקר"
-        self.code = 9970
-
-    def assignNode(self, node):
-        self.singleNode = node
-        self.mode = "single"
-        self.assigned = True
-        self.str = self.singleNode.name
-        self.str = translate(self.str, subForestVegForm_translation)
-        self.code = int(self.singleNode.codedValue)
-        self.convert()
-
-    def convert(self):
-        #This method CHECKS if a conversion (to altered node and result)
-        #and converts it.
-        #Works only for self.mode == "single".
-        sourceNode = self.singleNode
-        if (self.mode == "single") and (sourceNode.hasAlternative()):
-            alternativeNode_reflection = findNode(root, sourceNode.altCode)
-            #findNode might not find any node, and return an empty node.
-            #in case this happens - notify.
-            if alternativeNode_reflection.isEmpty():
-                txt = 'Could not find alternative node. Origin code: %s, Destination code: %s.' \
-                % (sourceNode.codedValue, sourceNode.altCode)
-                stepName = 'covtype'
-                self.standPolygon.notifier.add(stepName, 'warning', txt)
-            alt_name = alternativeNode_reflection.name
-            alt_codedValue = alternativeNode_reflection.codedValue
-            #set the singleNode to a NEW one: (not a reflection)
-            self.singleNode = Node(alt_name, alt_codedValue)
-            self.converted = True
-            self.str = self.singleNode.name
-            self.str = translate(self.str, subForestVegForm_translation)
-            self.code = self.singleNode.codedValue
-        return
-    """
-    def convert_old(self):
-        #This method CHECKS if a conversion (to altered node and result)
-        #and converts it.
-        #Works only for self.mode == "single".
-        source_codedValue = self.singleNode.codedValue
-        if (self.mode == "single") and (int(source_codedValue) in speciesConversions.keys()):
-            conv_dict = speciesConversions[int(source_codedValue)]
-            alt_name = conv_dict['alt_name']
-            alt_codedValue = conv_dict['alt_codedValue']
-            #set the singleNode to a new one:
-            self.singleNode = Node(alt_name, alt_codedValue)
-            self.converted = True
-            self.str = self.singleNode.name
-            self.code = int(self.singleNode.codedValue)
-            #self.sekerPoint.warnings.append("Species composition converted from %s to %s." % (source_codedValue, alt_codedValue))
-        return
-    """
-    def assignNodes(self, nodesList):
-        self.doubleNode = nodesList
-        self.mode = "double"
-        self.assigned = True
-        nodeNames = [n.name for n in self.doubleNode]
-        matrixResult = self.speciesComp_matrixObj.solve(nodeNames)
-        self.str = matrixResult
-        self.str = translate(self.str, subForestVegForm_translation)
-        #find the node of "מעורב ___ " by searching its name:
-        foundNode = findNodeByName(root, self.str)
-        if foundNode.isEmpty():
-            self.code = None
-        else:
-            self.code = foundNode.codedValue
-
-    def assignLayer(self, layer):
-        #deprecated.
-        #assign value based on a layer object.
-        self.mode = "layer"
-        self.assigned = True
-        self.str = layer.vegForm
-        self.str = translate(self.str, subForestVegForm_translation)
-    def assignLayers(self, layersList):
-        #assign value based on two layer objects.
-        self.mode = "layers"
-        self.code = None
-        self.assigned = True
-        layersVegForms = [l.vegForm for l in layersList]
-        matrixResult = self.vegForms_matrixObj.solve(layersVegForms)
-        self.str = matrixResult
-        self.str = translate(self.str, subForestVegForm_translation)
-    def assignBroadleaf(self, covtypeString):
-        #used when a SINGLE NODE was assigned and found to be 'מעורב רחבי-עלים'.
-        #hence, this method resets the actions of self.assignNode.
-        self.singleNode = Node()
-        self.mode = "broadLeaf"
-        self.assigned = True
-        #find the node by its translated name:
-        self.str = translate(covtypeString, subForestVegForm_translation)
-        foundNode = findNodeByName(root, self.str)
-        if foundNode.isEmpty():
-            self.code = None
-        else:
-            self.code = foundNode.codedValue
-
-    def assignSubForest(self, covtypeString):
-        self.mode = "subForest"
-        self.assigned = True
-        #find the node by its translated name:
-        self.str = translate(covtypeString, subForestVegForm_translation)
-        foundNode = findNodeByName(root, self.str)
-        if foundNode.isEmpty():
-            self.code = None
-        else:
-            self.code = foundNode.codedValue
-
-
-        
-
-    def __repr__(self):
-        return self.asText()
-    def asText(self):
-        return "name: %s. code: %s." % (self.str, self.code)
-
-class Node:
-    def __init__(self, name = "", codedValue = "", altCode = ""):
-        self.name = name
-        self.codedValue = codedValue
-        self.altCode = altCode
-        self.value = 0
-        self.children = []
-        self.parent = None
-    
-    def __repr__(self):
-        return "%s (%s): %s" % (self.name, self.codedValue, self.sumDown())
-
-    def hasattribute(self, attributeName):
-        return hasattr(self, attributeName)
-
-    def findAndSet(self, codedValue, valueToSet):
-        if self.codedValue == codedValue:
-            self.value = valueToSet
-            return
-        for child in self.children:
-            child.findAndSet(codedValue, valueToSet)
-        
-    def getValue(self):
-        #attribute 'text' is superior to 'name'.
-        if self.hasattribute('text'):
-            return self.text
-        else:
-            return self.name
-
-    def getNodesWithValue(self):
-        """
-        return a list of nodes with value higher than 0,
-        among this node and any of its children.
-        """
-        arr = []
-        findNodesAbove(self,0,arr)
-        return(arr)
-
-    def add_child(self, child):
-        child.parent = self
-        self.children.append(child)
-
-    def getLevel(self):
-        level = 0
-        p = self.parent
-        while p:
-            level += 1
-            p = p.parent
-        return level
-
-    def hasChildren(self):
-        return len(self.children) > 0
-
-    def hasAlternative(self):
-        """
-        Returns true if node has alternative node to be converted to.
-        (See class covertypeResult.convert()).
-        """
-        if self.altCode:
-            return True
-        else:
-            return False
-
-    def isEmpty(self):
-        """
-        Returns True if name and codedValue == ''.
-        """
-        if self.name == '' and self.codedValue == '':
-            return True
-        else:
-            return False
-
-    def printDown(self):
-        #print(3 * "-" * self.getLevel() + "|" + self.name + " : " + str(self.codedValue) + " : " + str(self.sumDown()))
-        print(3 * "-" * self.getLevel() + ">" + str(self.codedValue) + " : " + self.name)
-        #if self.codedValue == None: self.codedValue = ""
-        #print 3 * "-" * self.getLevel() + "|" + self.name + " : " + str(self.getLevel())
-        if self.hasChildren():
-            for c in self.children:
-                c.printDown()
-
-    def sumDown(self):
-        s = self.value
-        for c in self.children:
-            s += c.sumDown()
-        return s
-
-    def resetValues(self):
-        self.value = 0
-        for child in self.children:
-            child.resetValues()
-    
-    def asText(self):
-        if self.matrixProduct:
-            return self.matrixProduct
-        else:
-            return self.name
-
-class MatrixCoordinator:
-    #An object that initializes and deals with matrices.
-    def __init__(self, xlPath):
-        #ATTENTION!
-        #in order for this matrix to be consistent with the exact same
-        #strings provided in the excel table, always use field's ALIAS name.
-
-        #Notify in UI about process start:
-        message = 'Creating matrix object: %s' % os.path.basename(xlPath)
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-
-        overwrite_original = arcpy.env.overwriteOutput
-        arcpy.env.overwriteOutput = True
-        #tblPath = os.path.join(arcpy.env.scratchGDB,"matrix")
-        tblPath = os.path.join(arcpy.env.workspace,"matrix")
-        arcpy.ExcelToTable_conversion(xlPath, tblPath)
-
-        #Notify in UI about table dimensions:
-        #minus 2 because of added objectid and the values under "X" cell.
-        Ncol = len(arcpy.Describe(tblPath).fields) - 2
-        Nrow = getFeatureCount(tblPath)
-        message = 'Creating matrix object: %s. Table dimensions: %sx%s' % (os.path.basename(xlPath), Ncol, Nrow)
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-        
-        #This is the dict to be constructed in this __init__() method
-        #and be availabe for use later:
-        #{("column", "row"): "value"}
-        self.coordinationDict = {}
-        self.basename = os.path.basename(xlPath)
-        
-        
-        allFields = arcpy.ListFields(tblPath)
-        oidFieldName = getOidFieldName(tblPath).upper()
-        #Check if 'X' field exists.
-        if 'X' not in [f.name.upper() for f in allFields]:
-            arcpy.AddError('Excel table has no header called "X".')
-        
-        #Select fields that are not objectid nor 'X':
-        fields = []
-        for field in allFields:
-            name = field.name.upper()
-            if name not in [oidFieldName, 'X']:
-                fields.append(field)
-        
-        #Collect details for validation afterwards:
-        columns_N = len(fields)
-        columns_headings = [field.aliasName for field in fields]
-        #rows will be counted in the sc iteration:
-        rows_N = 0
-        rows_headings = []
-
-        #Construct self.coordinationDict using cursor:
-        sc = arcpy.SearchCursor(tblPath)
-        for r in sc:
-            #Use .lower() method for uniformity of the text "other".
-            secondary = r.getValue('X').lower()
-            rows_N += 1
-            rows_headings.append(secondary)
-            for field in fields:
-                #Use alias to keep exact same string.
-                primary = field.aliasName.lower()
-                value = r.getValue(field.name)
-                self.coordinationDict[(primary, secondary)] = value
-        del sc
-
-        #self.inputOptions~ is a list of all possible columns or rows:
-        self.inputOptions = set()
-        for inpt in rows_headings:
-            self.inputOptions.add(inpt)
-        for inpt in columns_headings:
-            self.inputOptions.add(inpt)
-
-        #Validate table after constructing:
-        validation = {
-            "rows equal columns": {
-                "condition": columns_N == rows_N,
-                "warning message": "%s מספר שורות לא שווה למספר העמודות" % self.basename
-            },
-            "headings are identical": {
-                "condition": sorted(rows_headings) == sorted(columns_headings),
-                "warning message": "%s טקסט כותרות עמודות לא זהה לכותרות שורות." % self.basename
-            }
-        }
-
-        #Use warning messages:
-        for validationCriteria in validation.keys():
-            criteriaDict = validation[validationCriteria]
-            if criteriaDict["condition"] == False:
-                arcpy.AddWarning(criteriaDict["warning message"])
-
-        arcpy.env.overwriteOutput = overwrite_original
-        arcpy.Delete_management(tblPath)
-        arcpy.ResetProgressor()
-
-    def solve(self, raw_values):
-        """
-        Returns elaborated vegForm and handles values that fall
-        within 'other' category.
-        - raw_values: [vegForm1 <str>, vegForm2 <str>].
-        #NOTICE! this method's argument is slightly different than
-        the one belongs to its counterpart in "classification may22".
-        """
-        #values: a list of validated inputs that can be used for the
-        #2x2 matrix.
-        values = []
-        #If the inputs are equal and both fall in 'other':
-        #then return the input and don't handle them both as 'other'.
-        if len(raw_values) == 0:
-            return None
-        elif len(raw_values) == 1:
-            #All values are the same.
-            return raw_values[0]
-        elif len(raw_values) == 2:
-            for raw_value in raw_values:
-                if raw_value in self.inputOptions:
-                    values.append(raw_value)
-                else:
-                    #If it's not a known input value, turn it into 'other'.
-                    values.append('other')
-            values = tuple(values)
-            return self.coordinationDict[values]
-        elif len(raw_values) > 2:
-            return '!number of inputs to matrix "%s" > 2' % self.basename
-
-class Matrix3DCoordinator:
-    #An object that initializes and deals with 3D matrices.
-    def __init__(self, xlPath):
-        #Notify in UI about process start:
-        message = 'Creating 3D matrix object: %s' % os.path.basename(xlPath)
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-
-        overwrite_original = arcpy.env.overwriteOutput
-        arcpy.env.overwriteOutput = True
-        #tblPath = os.path.join(arcpy.env.scratchGDB,"matrix")
-        tblPath = os.path.join(arcpy.env.workspace,"matrix")
-        arcpy.ExcelToTable_conversion(xlPath, tblPath)
-
-        #Import possible values for each dimension and output values
-        #from the dimension's field domain.
-        self.dimensions = [
-            {
-                'name': 'beitGidul',
-                'source': 'tool input',
-                'domain': 'tool input',
-                'domainValues': beitgidulList
-            },
-            {
-                'name': 'ageGroup',
-                'source': fieldsDict[40022].name,
-                'domain': fieldsDict[40022].domain,
-                'domainValues': listCodedValues(org.stands.workspace, fieldsDict[40022].domain)
-            },
-            {
-                'name': 'generalDensity',
-                'source': fieldsDict[50042].name,
-                'domain': fieldsDict[50042].domain,
-                'domainValues': listCodedValues(org.stands.workspace, fieldsDict[50042].domain)
-            },
-            {
-                'name': 'relativeDensity',
-                'source': fieldsDict[50044].name,
-                'domain': fieldsDict[50044].domain,
-                'domainValues': listCodedValues(org.stands.workspace, fieldsDict[50044].domain)
-            },
-        ]
-
-        #Notify in UI about table dimensions x, y, z:
-        #X- number of different values under "COL_A".
-        #Y- number of different values under "COL_B".
-        #Z- number of different values under FIRST ROW.
-        x_set = set()
-        y_set = set()
-        z_set = set()
-        sc = arcpy.da.SearchCursor(tblPath, '*')
-        firstRow = sc.next()[3:] #w/o objectid and headers of x and y.
-        for z_value in firstRow:
-            z_set.add(z_value)
-        #now go through all other rows:
-        for r in sc:
-            x = r[1]
-            y = r[2]
-            x_set.add(x)
-            y_set.add(y)
-        del sc
-        
-
-        self.tableDimensions = [len(dim) for dim in [x_set, y_set, z_set]]
-        self.keysByDimension = [list(s) for s in [x_set, y_set, z_set]]
-        
-        message = 'Creating 3D matrix object: %s. Table dimensions: %s' % (os.path.basename(xlPath), "x".join([str(d) for d in self.tableDimensions]))
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-        
-        #Notify for every dimension value that is not in domainValues:
-        #לעבור על כל סט איקס וואי זד ולהכניס וורנינג במידה והוא לא מופיע באופציות פוסיביליטיז
-        for i, dimDict in enumerate(self.dimensions[:3]):
-            domainValues = dimDict['domainValues']
-            tableValues = self.keysByDimension[i]
-            for tValue in tableValues:
-                if tValue not in domainValues:
-                    txt = '\t-Table value "%s" does not appear in domain "%s" of field "%s"' % (tValue, dimDict['domain'], dimDict['source'])
-                    arcpy.AddWarning(txt)
-
-        #This is the dict to be constructed in this __init__() method
-        #and be availabe for use later:
-        #{("x", "y", "z"): "value"}
-        self.coordinationDict = {}
-        self.basename = os.path.basename(xlPath)
-
-        #Construct self.coordinationDict using cursor:
-        sc = arcpy.da.SearchCursor(tblPath, '*')
-        firstRow = sc.next()
-        rowLen = len(firstRow)
-        indicesOfValue = list(range(3,len(firstRow)))
-        for r in sc:
-            x = r[1]
-            y = r[2]
-            #now iterate through relevant columns:
-            for colIndex in indicesOfValue:
-                z = firstRow[colIndex]
-                value = r[colIndex]
-                self.coordinationDict[(x, y, z)] = value
-                #Notify in case value is not in its domainValues:
-                if value not in self.dimensions[3]['domainValues']:
-                    dimDict = self.dimensions[3]
-                    txt = '\t-Table value "%s" does not appear in domain "%s" of field "%s"' % (value, dimDict['domain'], dimDict['source'])
-                    arcpy.AddWarning(txt)
-        del sc
-        
-        arcpy.env.overwriteOutput = overwrite_original
-        arcpy.Delete_management(tblPath)
-        arcpy.ResetProgressor()
-
-    def solve(self, raw_values):
-        outputDict = {
-            'value': None,
-            'errorMessage': None
-        }
-        #raw_values: a tuple (len=3) of validated inputs.
-        tup = tuple(raw_values)
-
-        #default value is error + table name + values
-        #defaultValue = "matrix error %s: %s" % (self.basename, str(tup))
-        defaultValue = "שגיאה"
-
-        #VALIDATION:
-        #1) length of tup must be 3:
-        if len(tup) == 3:
-            #2) check if all 3 values are among the options:
-            # a list of 3 booleans, one for each dimension.
-            conditions = [v in self.keysByDimension[i] for i,v in enumerate(tup)]
-            falseIndices = [i for i,v in enumerate(conditions) if v is False]
-            if falseIndices:
-                dimensionNameAndValue = [f"{self.dimensions[i]['name']}: {tup[i]}" for i in falseIndices]
-                dimensionNameAndValue_str = ', '.join(dimensionNameAndValue)
-                outputDict = {
-                    'value': defaultValue,
-                    'errorMessage': 'The following values are not among the options: %s. Check table "%s"' % (dimensionNameAndValue_str, self.basename)
-                }
-                return outputDict
-            else:
-                #All of the values are valid, proceed.
-                outputVal = self.coordinationDict[tup]
-                outputDict['value'] = outputVal
-                #If outputVal does not appear in the output field's domain:
-                outDimDict = self.dimensions[3]
-                if outputVal not in outDimDict['domainValues']:
-                    txt = 'Value "%s" does not appear in domain "%s". %s' % (outputVal, outDimDict['domain'], tup)
-                    outputDict['errorMessage'] = txt
-                return outputDict
-        else:
-            outputDict = {
-                'value': defaultValue,
-                'errorMessage': 'input object length is not 3'
-            }
-            return outputDict
-        
-class TotalCoverageMatrixCoordinator:
-    #An object that initializes and deals with Total Cover matrix.
-    #It is a matrixt with 3 Inputs and 1 Output.
-    def __init__(self, xlPath, shapeType = 'Point'):
-        #ATTENTION!
-        #in order for this matrix to be consistent with the exact same
-        #strings provided in the excel table, always use field's ALIAS name.
-
-        self.excelColumnNames = ['tmira', 'high', 'mid', 'TotalCoverage']
-
-        #Notify in UI about process start:
-        message = 'Creating total coverage matrix object: %s' % os.path.basename(xlPath)
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-
-        overwrite_original = arcpy.env.overwriteOutput
-        arcpy.env.overwriteOutput = True
-        #tblPath = os.path.join(arcpy.env.scratchGDB,"matrix")
-        tblPath = os.path.join(arcpy.env.workspace,"matrix")
-        arcpy.ExcelToTable_conversion(xlPath, tblPath)
-
-        #Notify in UI about number of columns:
-        Nrow = getFeatureCount(tblPath)
-        message = 'Creating Total Cover matrix object: %s. Number of rows: %s' % (os.path.basename(xlPath), Nrow)
-        arcpy.SetProgressor('default', message)
-        arcpy.AddMessage(message)
-
-        #Domains: import possible values.
-        field_codes = {
-            'Point':[40025,40035,40045,40120],
-            'Polygon': [50047,50051,50055,50088]
-        }
-        inputFields_codes = field_codes[shapeType][:3]
-        inputFields_domains = [fieldsDict[field_code].domain for field_code in inputFields_codes]
-        self.inputDomains_possibilities = [listCodedValues(arcpy.env.workspace, domain) for domain in inputFields_domains]
-        #Notify if a field is missing a domain OR the domain values are empty:
-        for i,domainPossibilities in enumerate(self.inputDomains_possibilities):
-            if len(domainPossibilities) == 0:
-                fieldCode = inputFields_codes[i]
-                fieldDomain = inputFields_domains[i]
-                fieldName = fieldsDict[fieldCode].name
-                workspace = arcpy.env.workspace
-                txt = 'Domain "%s" of field "%s" is empty/not-found in workspace: "%s"' % (fieldDomain, fieldName, workspace)
-                arcpy.AddWarning(txt)
-        
-        self.outputField_code = field_codes[shapeType][3]
-        self.outputField_domain = fieldsDict[self.outputField_code].domain
-        self.outputDomains_possibilities = listCodedValues(arcpy.env.workspace, self.outputField_domain)
-        
-        #This is the dict to be constructed in this __init__() method
-        #and be availabe for use later:
-        #{("input1", "input2", "input3"): "value"}
-        self.coordinationDict = {}
-        self.basename = os.path.basename(xlPath)
-        
-        #X- number of different values under "tmira".
-        #Y- number of different values under "high".
-        #Z- number of different values under "mid".
-        x_set = set()
-        y_set = set()
-        z_set = set()
-
-        #Construct self.coordinationDict using cursor:
-        sc = arcpy.da.SearchCursor(tblPath, self.excelColumnNames)
-        for r in sc:
-            inputTup = r[:3]
-            outputValue = r[3]
-
-            #validate values:
-            #Invalid values are values that appear in the excel file but not in domain.
-            invalidValues_fieldIndecies = [i for i,v in enumerate(inputTup) if v not in self.inputDomains_possibilities[i]]
-            invalid_fieldsAndValues = []
-            for i in invalidValues_fieldIndecies:
-                #called only if invalid value is found.
-                columnName = self.excelColumnNames[i]
-                invalidValue = inputTup[i]
-                invalid_fieldsAndValues.append((columnName, invalidValue))
-            if invalid_fieldsAndValues:
-                txt = '--[total cover matrix] Value is not in domain: %s' % invalid_fieldsAndValues
-                arcpy.AddWarning(txt)
-            #end of validation.
-
-            #add to dict
-            self.coordinationDict[inputTup] = outputValue
-            #add the column items to each set of possible values:
-            x_set.add(inputTup[0])
-            y_set.add(inputTup[1])
-            z_set.add(inputTup[2])
-
-        del sc
-        
-        self.keysByDimension = [list(s) for s in [x_set, y_set, z_set]]
-
-        arcpy.env.overwriteOutput = overwrite_original
-        arcpy.Delete_management(tblPath)
-        arcpy.ResetProgressor()
-
-    def solve(self, raw_values):
-        outputDict = {
-            'value': None,
-            'errorMessage': None
-        }
-        tup = tuple(raw_values)
-        defaultValue = "שגיאה"
-        #1) length of tup must be 3:
-        if len(raw_values) == 3:
-            #2) check if all 3 values are among the options:
-            # a list of 3 booleans, one for each dimension.
-            conditions = [v in self.keysByDimension[i] for i,v in enumerate(tup)]
-            falseIndices = [i for i,v in enumerate(conditions) if v is False]
-            if falseIndices:
-                dimensionNameAndValue = [f"{self.excelColumnNames[i]}: {tup[i]}" for i in falseIndices]
-                dimensionNameAndValue_str = ', '.join(dimensionNameAndValue)
-                outputDict = {
-                    'value': defaultValue,
-                    'errorMessage': 'The following values are not among the options: %s. Check table "%s"' % (dimensionNameAndValue_str, self.basename)
-                }
-                return outputDict
-            else:
-                #All of the values are valid, proceed.
-                outputVal = self.coordinationDict[tup]
-                outputDict['value'] = outputVal
-                #If outputVal does not appear in the output field's domain:
-                if len(self.outputDomains_possibilities)>0 and outputVal not in self.outputDomains_possibilities:
-                    txt = 'Value "%s" does not appear in domain "%s". %s' % (outputVal, self.outputField_domain, tup)
-                    outputDict['errorMessage'] = txt
-                return outputDict
-        else:
-            outputDict = {
-                'value': defaultValue,
-                'errorMessage': '[total cover matrix] Number of values is not 3: %s' % str(raw_values)
-            }
-            return outputDict
 
 class Notifier:
     """
@@ -2461,21 +1200,21 @@ class UniteLine(FcRow):
             if descision == '1':
                 # Desicion is '1' - approved for merge
                 # 1) Copy line's origin stands and related tables
-                # from current database to the buckup database.
+                # from current database to the backup database.
                 # 2) Delete origin stands and their related tables. 
                 # 3) Update the line's origin stands guid to the 
-                # new guid from the buckup database.
+                # new guid from the backup database.
                 # 4) Update the line's status to 0 - ממתין להחלטה.
                 # 5) Annex sekerpoints to the new stands.
 
                 # copy stand to the backup database
                 # and update the line's origin stands guid to the new guid
-                # from the buckup database.
+                # from the backup database.
                 orig_relationship_ls = self.FC.relationships['ls']
                 orig_FC = orig_relationship_ls.destination
                 fieldNames = [field.name for field in orig_FC.desc.fields]
-                buckup_relationship_ls = org_buckup.relationships['ls']
-                buckup_FC = buckup_relationship_ls.destination
+                backup_relationship_ls = org_backup.relationships['ls']
+                backup_FC = backup_relationship_ls.destination
                 # replace shape field with "SHAPE@"
                 for i, fieldName in enumerate(fieldNames):
                     if fieldName.lower() == 'shape':
@@ -2489,30 +1228,30 @@ class UniteLine(FcRow):
                                              standID)
                     
                     orig_uc = arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = sqlQuery)
-                    buckup_ic = arcpy.da.InsertCursor(buckup_FC.fullPath, fieldNames)
+                    backup_ic = arcpy.da.InsertCursor(backup_FC.fullPath, fieldNames)
                     for orig_r in orig_uc:
-                        # insert row to the buckup gdb and collect the globalID
-                        buckupObjectid = buckup_ic.insertRow(orig_r)
+                        # insert row to the backup gdb and collect the globalID
+                        backupObjectid = backup_ic.insertRow(orig_r)
                         # delete the original stand row
                         orig_uc.deleteRow()
-                    del buckup_ic, orig_uc
+                    del backup_ic, orig_uc
                     if 'orig_r' in locals(): del orig_r
                     # get the new guid
-                    buckup_sqlQuery = f'{buckup_relationship_ls.destination.oidFieldName} = {buckupObjectid}'
-                    buckup_sc = arcpy.da.SearchCursor(buckup_FC.fullPath, buckup_relationship_ls.foreignKey_fieldName, where_clause = buckup_sqlQuery)
-                    for buckup_r in buckup_sc:
-                        standIDs_new[i] = buckup_r[0]
-                    del buckup_sc
+                    backup_sqlQuery = f'{backup_relationship_ls.destination.oidFieldName} = {backupObjectid}'
+                    backup_sc = arcpy.da.SearchCursor(backup_FC.fullPath, backup_relationship_ls.foreignKey_fieldName, where_clause = backup_sqlQuery)
+                    for backup_r in backup_sc:
+                        standIDs_new[i] = backup_r[0]
+                    del backup_sc
                     
                     
                     # copy stands' rows from related tables
-                    # to the buckup database.
+                    # to the backup database.
                     for nickname in stands_tables_relationships.keys():
                         # stX - st1, st2, st3, st4
                         orig_relationship_stX = org.relationships[nickname]
                         orig_tableX = orig_relationship_stX.destination
-                        buckup_relationship_stX = org_buckup.relationships[nickname]
-                        buckup_tableX = buckup_relationship_stX.destination
+                        backup_relationship_stX = org_backup.relationships[nickname]
+                        backup_tableX = backup_relationship_stX.destination
                         
                         # locate foreignKey_fieldName ('stand_id') field index:
                         fieldNames_table = [field.name for field in orig_tableX.desc.fields]
@@ -2521,16 +1260,16 @@ class UniteLine(FcRow):
                                                  orig_relationship_stX.foreignKey_fieldName,
                                                  standID)
                         orig_uc = arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, where_clause = sqlQuery)
-                        buckup_ic = arcpy.da.InsertCursor(buckup_tableX.fullPath, fieldNames_table)
+                        backup_ic = arcpy.da.InsertCursor(backup_tableX.fullPath, fieldNames_table)
                         for orig_r in orig_uc:
                             # replace the foreignKey field value with the new guid
                             orig_r = list(orig_r)
                             orig_r[foreignKey_index] = standIDs_new[i]
-                            # insert row to the buckup gdb
-                            buckup_ic.insertRow(tuple(orig_r))
+                            # insert row to the backup gdb
+                            backup_ic.insertRow(tuple(orig_r))
                             # delete the original table row
                             orig_uc.deleteRow()
-                        del orig_uc, buckup_ic
+                        del orig_uc, backup_ic
                     
                     # assign sekerpoints to the new stand
                     orig_relationship_sp = org.relationships['sp']
@@ -2547,12 +1286,12 @@ class UniteLine(FcRow):
                     del orig_sekerpoints_uc
 
                 # update the line's origin stands guid to the new guid
-                # from the buckup database.
+                # from the backup database.
                 # update the line's status to None (null).
                 self.writeSelf([60006, 60007, 60008], [None] + standIDs_new)
 
             elif descision == '2':
-                # Desicion is '2' - restore from buckup.
+                # Desicion is '2' - restore from backup.
                 #@PATCH_TEMPORARY_7.25
                 pass
 
@@ -2708,2878 +1447,6 @@ Make sure it appears in 'acquireData' method" % fieldCode
             self.notifier.add(stepName, 'error', txt)
             return None
 
-class PoductPolygon(FcRow):
-    def __init__(self, parentFcRow, row, sekerpointsFC):
-        FcRow.__init__(self, row, sekerpointsFC)
-        stepName = 'polygonInitiation'
-        self.parent = parentFcRow
-        self.notifier = self.parent.notifier
-        self.stands = self.parent.stands
-
-        # Area proportions of source stands
-        sumArea = sum([s.area for s in self.stands])
-        # The first stand is always larger
-        self.stands[0].areaProportion = self.stands[0].area/sumArea
-        self.stands[1].areaProportion = self.stands[1].area/sumArea
-
-        self.areaDominance = self.stands[0].areaProportion >= 0.8
-        # Notify area dominance
-        if self.areaDominance:
-            txt = "area proportion >= 80%."
-            self.notifier.add(stepName, 'message', txt)
-
-        # Set polygon's shape
-        self.shape = self.constructGeometry()
-        self.writeSelf(50001, self.shape)
-
-        # Relate polygon with the unite line
-        self.relate()
-
-        # Create stamp object
-        self.stamp = self.getStamp()
-
-    def __repr__(self):
-        return "ProductPolygon object, id = %s" % self.id
-    
-    def constructGeometry(self):
-        """
-        Constructs the polygon geometry by union of two stands.
-        """
-        uniteL = self.parent
-        polygons = [stand.getSelfData(50001) for stand in uniteL.stands]
-        unionPolygon = polygons[0].union(polygons[1])
-        return unionPolygon
-
-    def relate(self):
-        """
-        Relate this polygon with the unite line.
-        """
-        relationship = org.relationships['ls']
-        stand_ID = self.row.getValue(relationship.foreignKey_fieldName)
-        self.parent.row.setValue(relationship.originKey_fieldName, stand_ID)
-        return
-
-    def getStamp(self):
-        """
-        Returns a list of tuples of [(fieldName, value), ...]
-        that are unique to the specific StandPolygon.
-        Enables to write a new related row.
-        DOES NOT contain relationship origin / destination field and values.
-        """
-        #field codes to be queried as input.
-        query_fieldCodes = [
-            50002, #forest number
-            50003, #helka number
-            50004  #stand number
-        ]
-
-        #the first (larger) stand will be used
-        stand = self.parent.stands[0]
-        
-        for_no = stand.getSelfData(query_fieldCodes[0])
-        helka = stand.getSelfData(query_fieldCodes[1])
-        stand_no = stand.getSelfData(query_fieldCodes[2])
-
-        #create a standAddress value by concat:
-        #<FOR_NO>_<HELKA> / <STAND_NO>
-        standAdress = "%s_%s / %s" % (for_no, helka, stand_no)
-        
-        #stampTuples: list of tuples to be returned
-        #Notice! the field names here are of the related tables.
-        #The dict rel_fNames makes sure the field names correspond to the fields excel table.
-        rel_fNames = {
-            'FOR_NO': fieldsDict[stands_relatedTables_globalFieldCodes[2]].name,
-            'HELKA': fieldsDict[stands_relatedTables_globalFieldCodes[3]].name,
-            'STAND_NO': fieldsDict[stands_relatedTables_globalFieldCodes[4]].name,
-            'standAddress': fieldsDict[stands_relatedTables_globalFieldCodes[1]].name,
-        }
-        stampTuples = [
-            (rel_fNames['FOR_NO'], for_no),
-            (rel_fNames['HELKA'], helka),
-            (rel_fNames['STAND_NO'], stand_no),
-            (rel_fNames['standAddress'], standAdress)
-        ]
-        return stampTuples
-
-    def getMatrix_self(self, fieldCode):
-        """
-        Takes a field code <int> or codes [<int>,] and returns the next matrix:
-        [
-            (area proportion <float>, data*), #stand 0
-            (area proportion <float>, data*), #stand 1
-        ]
-        *data - according to type of fieldCode:
-        fieldCode <int> → return a single value,
-        fieldCode [<int>,] → return a a list of values.
-        """
-        inputIslist = type(fieldCode) is list
-        matrix = []
-        for stand in self.stands:
-            if inputIslist:
-                data = []
-                for fCode in fieldCode:
-                    data.append(stand.getSelfData(fCode))
-            else:
-                data = stand.getSelfData(fieldCode)
-            tup = (
-                stand.areaProportion,
-                data
-            )
-            matrix.append(tup)
-        return matrix
-
-    def getMatrix_related(self, nickname, fieldCodes):
-        """
-        Takes relationship nickname and field code(s)
-        and returns the next matrix:
-        [
-            (area proportion <float>, data), #stand 0
-            (area proportion <float>, data), #stand 1
-        ]
-        """
-        matrix = []
-        for stand in self.stands:
-            tup = (
-                stand.areaProportion,
-                stand.getRelatedData(nickname, fieldCodes)
-            )
-            matrix.append(tup)
-        return matrix
-    
-    def setLayers(self):
-        """
-        Creating layer objects (forest and sub-forest) based on calculations
-        that were made previously in the code.
-        A helper function to run inside c__logiclayers method.
-        Background: in previous scripts the layer object were set during
-        the code, but this time it is not necessary.
-        """
-        layers = {
-            'tmira': ForestLayer(self, 4),
-            'high': ForestLayer(self, 3),
-            'mid': ForestLayer(self, 2),
-            'sub': SubForestLayer(self)
-        }
-        return layers
-
-    def coniferForest(self, presence, presenceType):
-        #Returns True if sub forest conifer forest meets criteria.
-        #Convert presenceConifer to index based on domain,
-        #obtain threshold based on presenceConiferType.
-        #Method variables are results of methods:
-        #c__presenceconifer() & c__presencetype() respectively.
-        
-        #presence_domain = every possible value of presence
-        presence_domain = [
-            None,
-            "אין",
-            "1-20",
-            "21-50",
-            "51-100",
-            "מעל 100",
-        ]
-        presence_thresholdByType = {
-            "נטיעה": 3,
-            "התחדשות_טבעית": 4,
-            "נטיעה,התחדשות_טבעית": 3
-        }
-
-        if presenceType in presence_thresholdByType.keys():
-            threshold = presence_thresholdByType[presenceType]
-            index = presence_domain.index(presence)
-            return index >= threshold
-        else:
-            return False
-    
-    def broadleafForest(self, presence, presenceType):
-        #Returns True if sub forest broadleaf forest meets criteria.
-        #Convert presenceBroadLeaf to index based on domain,
-        #obtain threshold based on presenceBroadLeafType.
-        #Method variables are results of methods:
-        #c__presencebroadleaf() & c__presencetype() respectively.
-        
-        #presence_domain = every possible value of presence
-        presence_domain = [
-            None,
-            "אין",
-            "1-5",
-            "6-10",
-            "11-20",
-            "מעל 20",
-        ]
-        presence_thresholdByType = {
-            "נטיעה": 3,
-            "התחדשות_טבעית": 5,
-            "נטיעה,התחדשות_טבעית": 3
-        }
-
-        if presenceType in presence_thresholdByType.keys():
-            threshold = presence_thresholdByType[presenceType]
-            index = presence_domain.index(presence)
-            return index >= threshold
-        else:
-            return False
-
-    def calculateAndWrite(self):
-        """
-        A module that runs calculation methods (c__...) and
-        writes their results into stand row, or its related
-        tables.
-        """
-        """
-        The following attributes with the prefix "v__" for VALUE of calculations.
-        The rest of the name, after the prefix, after the field name.
-        """
-        """
-        Special notice for Unite Stands:
-        1) At this point, there are Two active rows: 
-            UniteLine (self.parent) & ProductPolygon(self)
-            the later is a row of the new stand, not the existing stands being combined.
-        2) All data from the source stands must be queried in advance, 
-            in self.stands.__init__ method. because their rows are inactive now.
-        """
-
-        # SELF FIELDS:
-        # STAMP FIELDS:
-        self.writeSelf(
-            [50002, 50003, 50004],
-            [tup[1] for tup in self.stamp[:3]]
-        )
-        
-        self.v__generaldensity = self.c__density('general')
-        self.v__standdensity = self.c__density('stand')
-        self.writeSelf([50042, 50043], [self.v__generaldensity, self.v__standdensity])
-
-        self.v__actualagegroup = self.c__actualagegroup()
-        self.writeSelf(50045, self.v__actualagegroup)
-
-        self.v__relativedensity = self.c__relativedensity(
-            self.v__actualagegroup,
-            self.v__generaldensity,
-            input_beitGidul
-        )
-        self.writeSelf(50044, self.v__relativedensity)
-
-        self.v__start_year = self.c__start_year()
-        self.writeSelf(50027, self.v__start_year)
-        self.v__last_year = self.c__last_year()
-        self.writeSelf(50081, self.v__last_year)
-
-        #A dictionary of layerNum and their sorted field codes:
-        #  {layerNum <int>: [vegForm,layerCover,speciesNames,speciesCodes], ...}
-        forestLayer_numsFields = {
-            4:[50046,50047,50048,50049],
-            3:[50050,50051,50052,50053],
-            2:[50054,50055,50056,50057],
-        }
-        #A dictionary to store vegform before translation:
-        #  {layerNum <int>: vegForm, ...}
-        self.layerVegForm = {}
-        for layerNum, fieldCodes in forestLayer_numsFields.items():
-            vegForm = self.c__forestLayer__vegForm(layerNum)
-            #store value before translation to be used later (covtype)
-            self.layerVegForm[layerNum] = vegForm
-            #translate vegform to write into the layer:
-            vegForm_translated = translate(vegForm,subForestVegForm_translation)
-            self.forestlayerVegform_calculated = True
-            
-            layerCover = self.c__forestLayer__layerCover(layerNum)
-            
-            species_raw = self.c__forestLayer__species(layerNum)
-            speciesNames = species_raw['names']
-            speciesCodes = species_raw['codes']
-
-            self.writeSelf(fieldCodes, [vegForm_translated,layerCover,speciesNames,speciesCodes])
-
-        self.v__totalcoverage = self.c__totalcoverage()
-        self.writeSelf(50088, self.v__totalcoverage)
-
-        self.v__presenceconifer = self.c__presence('conifer')
-        self.v__presenceconifertype = self.c__presencetype(50064)
-        self.isConiferForest = self.coniferForest(
-            self.v__presenceconifer, 
-            self.v__presenceconifertype
-        )
-        self.v__presencebroadleaf = self.c__presence('broadleaf')
-        self.v__presencebroadleaftype = self.c__presencetype(50066)
-        self.writeSelf(
-            [50063, 50064, 50065, 50066],
-            [
-                self.v__presenceconifer,
-                self.v__presenceconifertype,
-                self.v__presencebroadleaf,
-                self.v__presencebroadleaftype
-            ]
-        )
-        self.isBroadleafForest = self.broadleafForest(
-            self.v__presencebroadleaf,
-            self.v__presencebroadleaftype
-        )
-        
-        self.v__deadtreespercent = self.c__treeharmindex(50068)
-        self.writeSelf(50068, self.v__deadtreespercent)
-        self.v__inclinedtreespercent = self.c__treeharmindex(50069)
-        self.writeSelf(50069, self.v__inclinedtreespercent)
-        self.v__brokentreespercent = self.c__treeharmindex(50070)
-        self.writeSelf(50070, self.v__brokentreespercent)
-        self.v__brurnttreespercent = self.c__treeharmindex(50071)
-        self.writeSelf(50071, self.v__brurnttreespercent)
-        
-        self.v__treeharm = self.c__treeharm(
-            [
-                self.v__deadtreespercent,
-                self.v__inclinedtreespercent,
-                self.v__brokentreespercent,
-                self.v__brurnttreespercent
-            ]
-        )
-        self.writeSelf(50067, self.v__treeharm)
-        
-        self.v__degenerationindex = self.c__degenerationindex()
-        self.writeSelf(50072, self.v__degenerationindex)
-        
-        # RELATED TABLES:
-        self.v__invasivespecies = self.c__invasivespecies()
-        for invSp, epicenter in self.v__invasivespecies.items():
-            self.writeRelated(
-                'st1',
-                [51001,51002],
-                [invSp, epicenter]
-            )
-
-        self.v__planttype = self.c__planttype()
-        for planttype, percent in self.v__planttype.items():
-            self.writeRelated('st2', [52001, 52002], [planttype, percent])
-
-        self.v__covtypeRel = self.c__covtypeRel()
-        for species, proportion in self.v__covtypeRel:
-            self.writeRelated('st3', [53001, 53002], [species, proportion])
-
-        self.v__vitalforest = self.c__vitalforest()
-        for defect, impact in self.v__vitalforest.items():
-            self.writeRelated('st4', [54001,54002], [defect, impact])
-
-        # RELATED TABLES DESCRIPTION:
-        self.v__invasivespecies_desc = self.c__invasivespecies_desc(self.v__invasivespecies)
-        self.writeSelf(50074, self.v__invasivespecies_desc)
-        self.v__planttype_desc = self.c__planttype_desc(self.v__planttype)
-        self.writeSelf(50058, self.v__planttype_desc)
-        self.v__covtype_desc = self.c__covtype_desc(self.v__covtypeRel)
-        self.writeSelf(50040, self.v__covtype_desc)
-        self.v__vitalforest_desc = self.c__vitalforest_desc(self.v__vitalforest)
-        self.writeSelf(50073, self.v__vitalforest_desc)
-
-        # BACK TO SELF FIELDS
-        # (logiclayer must run after c__planttype)
-        self.v__logiclayers = self.c__logiclayers()
-        oedered_fieldCodes = {
-            #order: [forest layer, veg form, layer cover, layer desc]
-            'primary': [50029,50030,50031,50032],
-            'secondary': [50033,50034,50035,50036]
-        }
-        for order, layerResult in self.v__logiclayers.items():
-            #oder is the key of the result dict, can be primary/secondary
-            #to fit the keys fieldCodes.
-            fieldCodes = oedered_fieldCodes[order]
-            values = layerResult.getValuesToWrite()
-            self.writeSelf(fieldCodes, values)
-
-        self.v__covtype = self.c__covtype(
-            self.v__covtypeRel,
-            self.v__logiclayers
-        )
-        self.writeSelf(50038, self.v__covtype.code)
-        self.writeSelf(50039, self.v__covtype.str)
-
-        self.v__forestagecomposition = self.c__forestagecomposition()
-        self.writeSelf(50041, self.v__forestagecomposition)
-
-        self.v__standvegform = self.c__standvegform(self.v__logiclayers)
-        self.writeSelf(50037, self.v__standvegform)
-
-        self.v__supSpecies_trees = self.c__subSpecies(50060)
-        self.writeSelf(
-            [50059,50060],
-            [self.v__supSpecies_trees['names'],self.v__supSpecies_trees['codes']]
-            )
-        self.v__supSpecies_shrubs = self.c__subSpecies(50062)
-        self.writeSelf(
-            [50061,50062],
-            [self.v__supSpecies_shrubs['names'],self.v__supSpecies_shrubs['codes']]
-            )
-
-        self.v__naturalvalues = self.c__naturalvalues()
-        self.writeSelf(50075, self.v__naturalvalues['main'])
-        if self.v__naturalvalues['details']:
-            self.writeSelf(50103, self.v__naturalvalues['details'])
-        
-        self.v__roadsidesconditions = self.c__roadsidesconditions()
-        self.writeSelf(50076, self.v__roadsidesconditions['main'])
-        if self.v__roadsidesconditions['details']:
-            self.writeSelf(50104, self.v__roadsidesconditions['details'])
-        
-        self.v__limitedaccessibilitytype = self.c__limitedaccessibilitytype()
-        self.writeSelf(50077, self.v__limitedaccessibilitytype['main'])
-        if self.v__limitedaccessibilitytype['details']:
-            self.writeSelf(50105, self.v__limitedaccessibilitytype['details'])
-        
-        self.v__foresthazards = self.c__foresthazards()
-        self.writeSelf(50078, self.v__foresthazards['main'])
-        if self.v__foresthazards['details']:
-            self.writeSelf(50106, self.v__foresthazards['details'])
-
-
-
-        self.v__groundlevelfloorvegform = self.c__groundlevelfloorvegform()
-        self.writeSelf(50089, self.v__groundlevelfloorvegform)
-        
-        self.v__pointvarianceindex = self.c__pointvarianceindex()
-        self.writeSelf(50087, self.v__pointvarianceindex)
-
-        return
-
-    def c__density(self, mode):
-        """
-        Takes density values of source stands.
-        Inputs: mode <str> - 'general' / 'stand'.
-        Validation: if value is in [None, "לא רלוונטי", "אין עצים"]: notify and return it. 
-        Process: weighted sum of index.
-        Returns: category <str>
-        """
-        StepNames = {
-            'general': 'generaldensity',
-            'stand': 'standdensity'
-        }
-        fieldCodes = {
-            'general': 50042,
-            'stand': 50043
-        }
-        stepName = StepNames[mode]
-        fieldCode = fieldCodes[mode]
-
-        domainValues = [
-            "לא רלוונטי",
-            "אין עצים",
-            "1-10",
-            "11-20",
-            "21-40",
-            "41-60",
-            "61-100",
-            "מעל  100"
-        ]
-        defaultValue = domainValues[0]
-
-        matrix = self.getMatrix_self(fieldCode)
-
-        # VALIDATION:
-        # in case any value is one of the following: [None, "לא רלוונטי", "אין עצים"],
-        # notify and return this value.
-        exceptionValues = [None] + domainValues[:2]
-        inputValues = [tup[1] for tup in matrix]
-        for inputValue in inputValues:
-            if inputValue in exceptionValues:
-                # value is from [null, "לא רלוונטי", "אין עצים"]
-                # return defaultValue.
-                return defaultValue
-            elif inputValue not in domainValues:
-                # value is entirely not from domain AND is not None.
-                # notify and return None
-                txt = "input value is not from domain: %s" % inputValue
-                self.notifier.add(stepName, 'warning', txt)
-                return None
-
-        # LOGIC:
-        # at this point we are confident that the values are from domainValues[2:]
-        weighted_value = normal_round(sum([proportion*domainValues.index(category) for proportion, category in matrix]))
-        result = domainValues[weighted_value]
-        return result
-
-    def c__relativedensity(self, agegroup, generaldensity, beitgidul):
-        """
-        Method takes string inputs and inserts them as parameters for
-        a 3-dimensional matrix.
-        Notice: input values age group and general density are
-        previously calculated for this new stand in calculate and write.
-        """
-        stepName = 'relativedensity'
-        tup = (
-            beitgidul,
-            agegroup,
-            generaldensity
-        )
-        matrix_solution = relativeDensityKeyCoordinator.solve(tup)
-        if matrix_solution['errorMessage']:
-            #That means something went wrong and a warning should be raised.
-            txt = matrix_solution['errorMessage']
-            self.notifier.add(stepName, 'warning', txt)
-        
-        return matrix_solution['value']
-
-    def c__actualagegroup(self):
-        """
-        Takes source polygons' values, validates they are among domain values,
-        process and return actual age group.
-        """
-        stepName = 'actualagegroup'
-
-        domainValues = [
-            "לא רלוונטי",
-            "רב גילי",
-            "בהקמה (1)",
-            "בהקמה (2)",
-            "בהקמה (3)",
-            "בהקמה (4)",
-            "בהקמה (5)",
-            "חדש (6-10)",
-            "צעיר (11-15)",
-            "צעיר (16-20)",
-            "מתבגר (21-25)",
-            "מתבגר (26-30)",
-            "בוגר (31-40)",
-            "בוגר (41-50)",
-            "בוגר (51-60)",
-            "ותיק (61-75)",
-            "ותיק (76-90)",
-            "ותיק (91-105)"
-        ]
-        matrix = self.getMatrix_self(50045)
-        #general density of the larger polygon:
-        generalDensity_0 = self.stands[0].getSelfData(50042)
-
-        # VALIDATION:
-        # valid only if both values are from domainValues[2:]
-        validValues_sum = sum([t[1] in domainValues[2:] for t in matrix])
-        if validValues_sum == 0:
-            txt = "both source values are invalid."
-            self.notifier.add(stepName, 'warning', txt)
-            return None
-        elif validValues_sum == 1:
-            # is the invalid value not from domainValues[:2]?
-            invalidFromFirstTwo = sum([t[1] in domainValues[:2] for t in matrix]) > 0
-            if invalidFromFirstTwo:
-                # continue to logic with one value of domainValues[2:].
-                # pay attention: the return value might be one of these two,
-                # in that case, notify AFTER the logic.
-                pass
-            else:
-                # the invalid value is not from the domain at all.
-                invalidValue = [t[1] for t in matrix if t[1] not in domainValues[:2]][0]
-                txt = "source value (%s) is not from domain." % invalidValue
-                self.notifier.add(stepName, 'warning', txt)
-                return None
-
-        # LOGIC:
-        result = None
-        if self.areaDominance:
-            result = matrix[0][1]
-        elif generalDensity_0 in ["לא רלוונטי", "אין עצים", None]:
-            result = matrix[1][1]
-        else:
-            seniorIndex = max([domainValues.index(t[1]) for t in matrix])
-            result = domainValues[seniorIndex]
-        
-        # POST-LOGIC VALIDATION:
-        if result in domainValues[:2] + [None]:
-            # notify and return
-            txt = "returns - %s" % result
-            self.notifier.add(stepName, 'warning', txt)
-        return result
-
-    def c__start_year(self):
-        """
-        Takes source polygons' values, validates they are intable,
-        process and return start year.
-        """
-        stepName = 'startyear'
-
-        matrix = self.getMatrix_self(50027)
-        #general density of the larger polygon:
-        generalDensity_0 = self.stands[0].getSelfData(50042)
-
-        # VALIDATION:
-        # valid only if both polygons are intable.
-        validValues = [t[1] for t in matrix if isIntable(t[1])]
-        if len(validValues) == 0:
-            # both values are invalid,
-            # notify and return None.
-            txt = "both of the values of source polygons are not a number."
-            self.notifier.add(stepName, 'warning', txt)
-            return None
-        elif len(validValues) == 1:
-            # only one value is valid, return it.
-            return validValues[0]
-
-        # LOGIC:
-        if self.areaDominance:
-            return matrix[0][1]
-        elif generalDensity_0 in ["לא רלוונטי", "אין עצים", None]:
-            return matrix[1][1]
-        else:
-            return min([t[1] for t in matrix])
-    
-    def c__last_year(self):
-        """
-        Takes source polygons' values, validates they are intable,
-        process and return last year.
-        """
-        stepName = 'lastyear'
-
-        matrix = self.getMatrix_self(50081)
-        #general density of the larger polygon:
-        generalDensity_0 = self.stands[0].getSelfData(50042)
-
-        # VALIDATION:
-        # valid only if both polygons are intable.
-        validValues_sum = sum([isIntable(t[1]) for t in matrix])
-        if validValues_sum == 0:
-            return None
-        elif validValues_sum != 2:
-            # notify and return None
-            isOrAre = ['is', 'are'][validValues_sum-1]
-            txt = "%s of the values of source polygons %s not a number." % (validValues_sum, isOrAre)
-            self.notifier.add(stepName, 'warning', txt)
-            return None
-
-        # LOGIC:
-        if self.areaDominance:
-            return matrix[0][1]
-        elif generalDensity_0 in ["לא רלוונטי", "אין עצים", None]:
-            return matrix[1][1]
-        else:
-            return max([t[1] for t in matrix])
-
-    def c__forestLayer__vegForm(self, layerNum):
-        """
-        Take all vegForms from forest layers,
-        Returns vegForm <int> / <None> according to algorithm.
-        - layerNum - 4 / 3 / 2 <int> (tmira, high, mid. respectively).
-        """
-
-        layerToFieldCode = {
-            4: 50046,
-            3: 50050,
-            2: 50054,
-        }
-        priorityVegForms_1 = ['מחטני', 'רחבי-עלים']
-        priorityVegForms_2 = ['איקליפטוס', 'שיטים', 'אשלים', 'שיטים פולשני'] 
-        stepName = f'layerVegForm_{layerToShortText[layerNum]}'
-        fieldCodes = layerToFieldCode[layerNum]
-        matrix = self.getMatrix_self(fieldCodes)
-
-        # LOGIC:
-        raw_vegForm_0 = matrix[0][1]
-        raw_vegForm_1 = matrix[1][1]
-
-        # handle null values -
-        # if one of the values is None → return the second value
-        # (might also be None).
-        if raw_vegForm_0 is None:
-            return raw_vegForm_1
-        elif raw_vegForm_1 is None:
-            return raw_vegForm_0
-        # at this point - both values are not None.
-
-        # split, remove spaces, and sort alphabetically to compare
-        splitted_vegform_0 = splitAndRemoveSpacesFromEnds(raw_vegForm_0, ',')
-        splitted_vegform_0.sort()
-        splitted_vegform_1 = splitAndRemoveSpacesFromEnds(raw_vegForm_1, ',')
-        splitted_vegform_1.sort()
-
-        sameVegform = splitted_vegform_0 == splitted_vegform_1
-        vegForm_pool = removeDup(splitted_vegform_0 + splitted_vegform_1)
-        vegForm_lengths = [len(splitted_vegform_0), len(splitted_vegform_1)]
-        if sameVegform or self.areaDominance:
-            # same veg form or forms, including len() == 1
-            # - or -
-            # area of stand 1 > 80%
-            return ','.join(splitted_vegform_0)
-        elif vegForm_lengths == [1, 1]:
-            # both stands have a single vegForm,
-            # return the common veg form.
-            return splitted_vegform_0[0]
-        elif 1 in vegForm_lengths and 2 in vegForm_lengths and len(vegForm_pool) == 2:
-            # one stand has single vegForm, the other has two,
-            # and they share one vegForm.
-            # return the common veg form.
-            if len(splitted_vegform_0) == 1:
-                return splitted_vegform_0[0]
-            else:
-                return splitted_vegform_1[0]
-        elif len(vegForm_pool) > 0:
-            # len () > 2
-            # check if any of the the next list is in the pool:
-            for vegForm in priorityVegForms_1:
-                if vegForm in vegForm_pool:
-                    return vegForm
-            # check area proportion >= 0.6:
-            if self.stands[0].areaProportion >= 0.6:
-                return ','.join(splitted_vegform_0)
-            # same as before, using a different list:
-            for vegForm in priorityVegForms_2:
-                if vegForm in vegForm_pool:
-                    return vegForm
-            else:
-                return None
-        else:
-            return None
-
-    def c__forestLayer__layerCover(self, layerNum):
-        """
-        Takes cover categories from source polygons' forest layers,
-        sum their (area proportion * cover median) and returns
-        cover category of product polygon.
-        - layerNum - 4 / 3 / 2 <int> (tmira, high, mid. respectively).
-        Returns layer cover <str>.
-        """
-        layerToFieldCode = {
-            4: 50047,
-            3: 50051,
-            2: 50055
-        }
-        stepName = f'layerCover_{layerToShortText[layerNum]}'
-        fieldCode = layerToFieldCode[layerNum]
-        matrix = self.getMatrix_self(fieldCode)
-        # the index of 'אין' in layerCover_table1
-        defaultLayerCover_key = 'אין'
-        domainValues = layerCover_table1.keys()
-
-        # VALIDATION & ORGANIZING:
-        validTuples = []
-        for proportion, rawValue in matrix:
-            # None value means zero
-            if rawValue is None:
-                # replace with the empty (=zero) placeholder
-                tup = (proportion, defaultLayerCover_key)
-                validTuples.append(tup)
-            # validate covers are from domain values
-            elif rawValue not in domainValues:
-                # notify and skip tuple
-                txt = 'invalid value %s.' % rawValue
-                self.notifier.add(stepName, 'warning', txt)
-            else:
-                # rawValue is from domainValues
-                tup = (proportion, rawValue)
-                validTuples.append(tup)
-
-        # LOGIC:
-        if validTuples:
-            weighted_value = sum([proportion*layerCover_table1[category][1] for proportion, category in validTuples])
-            result = toCategory(weighted_value, layerCover_table1_backwardsList)
-            return result
-        else:
-            return defaultLayerCover_key
-
-    def c__forestLayer__species(self, layerNum):
-        """
-        Takes all the species codes from layers of layerNum, among all
-        the input stands.
-        #@ multiply by area proportion?
-        Finds the 3 most frequent species codes, matches them with
-        their species names.
-        returns a dict of the 3 most frequent codes and names
-        ready to be used as string to applied as field value.
-        - layerNum - 4 / 3 / 2 <int> (tmira, high, mid. respectively).
-        """
-
-        # empty output dict:
-        outdict = {
-            'codes': None,
-            'names': None
-        }
-
-        layerToFieldCode = {
-            # layer num: spCode field code,
-            4: 50049,
-            3: 50053,
-            2: 50057
-        }
-        stepName = f'species_{layerToShortText[layerNum]}'
-        fieldCode = layerToFieldCode[layerNum]
-        species_matrix = self.getMatrix_self(fieldCode)
-        vegForm = self.layerVegForm[layerNum]
-
-        """
-        ### demo data ###
-        species_matrix = [
-            (0.4, '1103,1204,1202'),
-            (0.6, '1103,1105,3042,2113')
-        ]
-        vegForm = 'מחטני,רחבי-עלים'
-        self.areaDominance = False
-        ### end of demo data ###
-        """
-        """
-        Dictionary to coordinate between valid possible values of
-        veg form (keys) and their JSON species super-group (values).
-        The source of these values is from the output of "unite points"
-        for fields 50046, 50050, 50054. More specifically - a list of
-        raw point values, after translation
-        (e.g, "שיטים_פולשני" to "שיטים פולשני").
-        """
-        vegForm_validValues = {
-            'מחטני': '1000',
-            'חורש': '3900',
-            'רחבי-עלים': '2900',
-            'בוסתנים ומטעים': '2990',
-            'שיטים': '2200',
-            'שיטים פולשני': '2250',
-            'איקליפטוס': '2100',
-            'יער גדות נחלים': '3935',
-            'אשלים': '3060',
-        }
-        organizingVegForm_hierarchy = [
-            ['מחטני', 'רחבי-עלים'],
-            'מחטני',
-            'רחבי-עלים',
-            'איקליפטוס',
-            'שיטים',
-            'אשלים',
-            'שיטים פולשני'
-        ]
-
-        # VALIDATION:
-        # vegForm must be from valid values:
-        if hasattr(vegForm,'split') and vegForm != '':
-            vegForms = []
-            for vegForm_split in vegForm.split(','):
-                if vegForm_split in vegForm_validValues.keys():
-                    vegForms.append(vegForm_split)
-                else:
-                    txt = 'invalid vegForm value "%s".' % vegForm_split
-                    self.notifier.add(stepName, 'warning', txt)
-        else:
-            # vegForm is not anything to work with - return empty dict.
-            return outdict
-
-        if not vegForms:
-            # no valid vegForm found - return empty dict.
-            return outdict
-        
-        # species codes: every raw value has to be:
-        # 1) splittable into intable items
-        # 2) found in speciesDict
-        
-        # [[species codes <int> of 1st stand], [species codes <int> of 2nd stand]]
-        speciesCodes_byStand = []
-        for areaProportion, speciesCodes_raw in species_matrix:
-            stand_speciesCodes = []
-            if hasattr(speciesCodes_raw,'split') and speciesCodes_raw != '':
-                speciesCodes_split = speciesCodes_raw.split(',')
-                #remove unwanted ' ' spaces from all splitValues:
-                speciesCodes_split = [splitVal.replace(' ', '') for splitVal in speciesCodes_split]
-                for speciesCode_raw in speciesCodes_split:
-                    if isIntable(speciesCode_raw):
-                        speciesCode = int(speciesCode_raw)
-                        if speciesCode in speciesDict.keys():
-                            stand_speciesCodes.append(speciesCode)
-                        else:
-                            # notify that species code is not found in species JSON:
-                            txt = 'Species code value (%s) is not found in: "%s".'\
-                            % (speciesCode, speciesDict['__jsonFileName__'])
-                            self.notifier.add(stepName, 'warning', txt)
-            speciesCodes_byStand.append(stand_speciesCodes)
-        # at this point at least one species must be found in both stands:
-        if not speciesCodes_byStand[0] and not speciesCodes_byStand[1]:
-            # no valid species is found - return empty dict.
-            return outdict
-        
-
-        # LOGIC:
-        # area dominance, and the dominant stand has species codes
-        if self.areaDominance and speciesCodes_byStand[0]:
-            speciesCodes = speciesCodes_byStand[0]
-            speciesNames = [speciesDict[code] for code in speciesCodes]
-            outdict = {
-                'codes': ','.join([str(x) for x in speciesCodes]),
-                'names': ','.join([str(x) for x in speciesNames])
-            }
-            return outdict
-
-        # find organizing vegForm/s:
-        organizing_vegForms = []
-        for inspected_vegForm in organizingVegForm_hierarchy:
-            if type(inspected_vegForm) is list:
-                # vegForms must include all the vegForms from inspected_vegForm list
-                includesAll = False not in [inspected in vegForms for inspected in inspected_vegForm]
-                if includesAll:
-                    organizing_vegForms = inspected_vegForm
-                    # found - break from loop
-                    break
-            elif inspected_vegForm in vegForms:
-                # found - break from loop
-                organizing_vegForms.append(inspected_vegForm)
-                break
-        
-        if not organizing_vegForms:
-            # none of the output stand veg forms appears in organizingVegForm_hierarchy.
-            # return empty dict.
-            return outdict
-        
-        # get organizing_vegForms's group species codes
-        organizing_groupSpeciesCodes = [vegForm_validValues[org_vegForm] for org_vegForm in organizing_vegForms]
-
-        # use species, area proportions, and organizing_vegForms
-        # to create a preferences table:
-
-        # {speciesGroupCode: {speciesCode <int>: sum of area proportions <float>, ...}, ...}
-        species_areaSums = {speciesGroupCode:{} for speciesGroupCode in organizing_groupSpeciesCodes}
-        for i, speciesCodes in enumerate(speciesCodes_byStand):
-            areaProportion = species_matrix[i][0]
-            for speciesCode in speciesCodes:
-                # check if this species belongs to species representation of vegForm,
-                # or belongs to any of its children.
-                node = findNode(root,str(speciesCode))
-                for speciesGroupCode in organizing_groupSpeciesCodes:
-                    if isOrIsChildOf_code(node, speciesGroupCode):
-                        # species belongs to the organizing species group
-                        # can add its area proportion
-                        if speciesCode in species_areaSums[speciesGroupCode].keys():
-                            species_areaSums[speciesGroupCode][speciesCode] += areaProportion
-                        else:
-                            species_areaSums[speciesGroupCode][speciesCode] = areaProportion
-        
-        # omit species groups that don't contain species:
-        species_areaSums = {key:value for key, value in species_areaSums.items() if value != {}}
-
-        # divide each area sum by N species in group (modify species_areaSums)
-        for speciesGroupCode, speciesSumArea_dict in species_areaSums.items():
-            nSpeciesInGroup = len(speciesSumArea_dict)
-            if nSpeciesInGroup > 1:
-                speciesSumArea_dict_modified = {key:value/nSpeciesInGroup for key, value in speciesSumArea_dict.items()}
-                species_areaSums[speciesGroupCode] = speciesSumArea_dict_modified
-        
-        # get species count:
-        speciesCount = sum([len(speciesGroupCode.keys()) for speciesGroupCode in species_areaSums.values()])
-        speciesGroupCount = len(species_areaSums.keys())
-
-        if speciesCount == 0:
-            # no species found - return empty dict
-            return outdict
-        elif speciesCount <= 3 or speciesGroupCount == 1:
-            # collect species codes, sort by weightedValue and return
-            # [(speciesCode <int>, weightedValue <float>), ...]
-            speciesTuples = []
-            for species_weightedValue_dict in species_areaSums.values():
-                for speciesCode, weightedValue in species_weightedValue_dict.items():
-                    tup = (speciesCode, weightedValue)
-                    speciesTuples.append(tup)
-            # sort by weightedValue (descending)
-            speciesTuples.sort(key=lambda x: x[1], reverse = True)
-            # limit sumber of species to 3:
-            # (since they all belong to the same species group it is allowed to do it arbitrarily)
-            speciesCodes = [tup[0] for tup in speciesTuples][:3]
-            speciesNames = [speciesDict[c] for c in speciesCodes]
-            outdict = {
-                'codes': ','.join([str(x) for x in speciesCodes]),
-                'names': ','.join([str(x) for x in speciesNames])
-            }
-            return outdict
-        else:
-            # output must:
-            # 1) limited to 3 species,
-            # 2) include species from all the organizing veg form groups (if > 1 group).
-            # {speciesGroupCode: [(speciesCode <int>, weightedValue <float>, speciesGroupCode <str>), ...], ...}
-            speciesTuples = []
-            for speciesGroupCode, species_weightedValue_dict in species_areaSums.items():
-                for speciesCode, weightedValue in species_weightedValue_dict.items():
-                    tup = (speciesCode, weightedValue, speciesGroupCode)
-                    speciesTuples.append(tup)
-            # sort by weightedValue (descending)
-            speciesTuples.sort(key=lambda x: x[1], reverse = True)
-            # outputTuples is first created with the top 2 weighted value species -
-            outputTuples = speciesTuples[:2]
-            group_heterogeneous = outputTuples[0][2] != outputTuples[1][2]
-            if group_heterogeneous:
-                # the output species already include species from both species groups,
-                # it is okay to take the 3rd
-                outputTuples.append(speciesTuples[2])
-            else:
-                # the last tuple must be of different species group.
-                homogeneous_group = outputTuples[0][2]
-                # look for the next species from species that are not yet selected.
-                for tup in speciesTuples[2:]:
-                    tupGroup = tup[2]
-                    if tupGroup != homogeneous_group:
-                        outputTuples.append(tup)
-                        # add only one:
-                        break
-            
-            speciesCodes = [tup[0] for tup in outputTuples]
-            speciesNames = [speciesDict[c] for c in speciesCodes]
-            outdict = {
-                'codes': ','.join([str(x) for x in speciesCodes]),
-                'names': ','.join([str(x) for x in speciesNames])
-            }
-            return outdict
-
-    def c__totalcoverage(self):
-        stepName = 'totalcoverage'
-
-        domainValues = list(layerCover_table1.keys())
-
-        fieldCode = 50088
-        matrix = self.getMatrix_self(fieldCode)
-        valid_tuples = []
-
-        # VALIDATION:
-        for proportion, raw_value in matrix:
-            if raw_value in domainValues:
-                valid_tuples.append((proportion, raw_value))
-            elif raw_value is not None:
-                fieldAlias = fieldsDict[fieldCode].alias
-                txt = 'invalid value (%s) in field "%s".' % (raw_value, fieldAlias)
-                self.notifier.add(stepName, 'warning', txt)
-
-        # LOGIC:
-        weighted_value = sum([proportion*layerCover_table1[category][1] for proportion, category in matrix])
-        result = toCategory(weighted_value, layerCover_table1_backwardsList)
-
-        return result
-
-    def c__presencetype(self, fieldCode):
-        """
-        Takes a field code, gets its data, and combining the different
-        values without duplications acording to the domain "s_PresenceType".
-        """
-        stepName = 'presencetype'
-
-        domainValues = [
-            'אין',
-            'התחדשות_טבעית',
-            'נטיעה',
-            'נטיעה,התחדשות_טבעית'
-        ]
-
-        matrix = self.getMatrix_self(fieldCode)
-        raw_values = [value for area, value in matrix]
-        # use set to avoid duplications
-        valid_values = set()
-        
-        # VALIDATION:
-        for raw_value in raw_values:
-            if not hasattr(raw_value, 'split'):
-                continue
-            else:
-                spit_values = raw_value.split(',')
-                for split_value in spit_values:
-                    if split_value in domainValues:
-                        valid_values.add(split_value)
-                    elif split_value is not None:
-                        fieldAlias = fieldsDict[fieldCode].alias
-                        txt = 'invalid value (%s) in field "%s".' % (split_value, fieldAlias)
-                        self.notifier.add(stepName, 'warning', txt)
-        
-        # LOGIC:
-        if valid_values:
-            valid_values = list(valid_values)
-            if domainValues[3] in valid_values:
-                return domainValues[3]
-            elif domainValues[1] in valid_values and domainValues[2] in valid_values:
-                return domainValues[3]
-            elif domainValues[1] in valid_values:
-                return domainValues[1]
-            elif domainValues[2] in valid_values:
-                return domainValues[2]
-            else:
-                return domainValues[0]
-        else:
-            # return the default value 'אין'.
-            return domainValues[0]
-
-    def c__treeharmindex(self, fieldCode):
-        """
-        Not to be confused with treeharm field.
-        Takes values of harm rank from one of the fields:
-            -DeadTreesPercent
-            -InclinedTreesPercent
-            -BrokenTreesPercent
-            -BrurntTreesPercent
-        takes each category's median, multiply by area proportion, sum
-        and return the matching category.
-        """
-        fieldName = fieldsDict[fieldCode].name
-        stepName = "tree harm index: %s" % fieldName
-        domainValues = {
-            #value <str>: (ceil of avg <int>, max <int>),
-            "אין": (0, 0),
-            "זניח (3%-0%)": (2, 3),
-            "מועט (10%-3%)": (7, 10),
-            "בינוני (33%-10%)": (22, 33),
-            "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
-        }
-        #backwardsList for toCategory function.
-        #(maxVal of category, category name)
-        backwardsList = [(v[1],k) for k,v in domainValues.items()]
-        
-        matrix = self.getMatrix_self(fieldCode)
-
-        # VALIDATE:
-
-        # a list of category median multiplied by area proportion
-        validMediansToProportion = []
-        for areaProportion, category in matrix:
-            category_isValid = category in domainValues.keys()
-            if category_isValid:
-                medianValue = domainValues[category][0]
-                weightedValue = areaProportion*medianValue
-                validMediansToProportion.append(weightedValue)
-            elif category is None:
-                #A notification is not necessary.
-                continue
-            else:
-                #category is not valid nor none → notify as warning.
-                txt = "Invalid value insource polygon field '%s': %s." % (fieldName, category)
-                self.notifier.add(stepName, 'warning', txt)
-        
-        # LOGIC:
-        if validMediansToProportion:
-            weightedSum = sum(validMediansToProportion)
-            category = toCategory(weightedSum, backwardsList)
-            return category
-        else: 
-            return None
-
-    def c__treeharm(self, treeharmList):
-        """
-        Takes 4 outputs of c__treeharmindex, convets each one to
-        its category's average, sums, and returns category <str> of
-        min(sum(), 100).
-        """
-        stepName = "treeharm"
-        #constants from c__treeharmindex:
-        domainValues = {
-            #value <str>: (ceil of avg <int>, max <int>),
-            "אין": (0, 0),
-            "זניח (3%-0%)": (2, 3),
-            "מועט (10%-3%)": (7, 10),
-            "בינוני (33%-10%)": (22, 33),
-            "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
-        }
-        #backwardsList for toCategory function.
-        #(maxVal of category, category name)
-        backwardsList = [(v[1],k) for k,v in domainValues.items()]
-
-        #notice: items of treeharmList can be either one of domainValues.keys() or None.
-        #Remove None from treeharmList:
-        while None in treeharmList:
-            treeharmList.remove(None)
-        #convert category to ceil of avg:
-        averagesList = [domainValues[category][0] for category in treeharmList]
-        #Sum. if len(averagesList) == 0: sum = 0.
-        averagesSum = sum(averagesList)
-        #Notify in case averagesSum > 100:
-        if averagesSum>100:
-            txt = 'sum of harms averages > 100. Items: %s' % str(treeharmList)
-            self.notifier.add(stepName, 'warning', txt)
-        #convert to categoryand return:
-        category = toCategory(min(averagesSum, 100), backwardsList)
-        return category
-
-    def c__subSpecies(self, codesFieldCode):
-        """
-        Takes group cover, area proportion, and species list
-        of every source stand, 
-        calculates each species weighted value,
-        return top 3 species codes and names.
-        - codesFieldCode <int>: 50060 (trees) or 50062 (shrubs).
-        """
-        stepNames = {
-            50060: 'trees',
-            50062: 'shrubs'
-        }
-        stepName = 'species-%s' % stepNames[codesFieldCode]
-        planttypeKeys = {
-            50060: 'עצים',
-            50062: 'שיחים'
-        }
-        planttypeKey = planttypeKeys[codesFieldCode]
-
-        
-        matrix_species = self.getMatrix_self(codesFieldCode)
-        matrix_covers = self.getMatrix_related('st2', [52001,52002])
-
-        ### demo data ###
-        """
-        matrix_species = [
-            (0.4, '4121,8027,9018'),
-            (0.6, '9018,4121,4161')
-        ]
-        matrix_covers = [
-            (0.4, [(planttypeKey, 50)]),
-            (0.6, [(planttypeKey, 20)])
-        ]
-        ### end of demo data ###
-        """
-
-        # LOGIC BEFORE VALIDATON:
-        # in case of area proportion of larger stand is >= 80%
-        if self.areaDominance:
-            # return values of the larger stand without changing
-            fieldCodes = {
-                50060: [50060,50059],
-                50062: [50062,50061]
-            }
-            matrix = self.getMatrix_self(fieldCodes[codesFieldCode])
-            dominantStand_values = matrix[0][1]
-            outdict = {
-                'codes': dominantStand_values[0],
-                'names': dominantStand_values[1]
-            }
-            return outdict
-
-        # VALIDATION & ORGANIZING:
-        # species-focused
-        # create a dict of {species code <int>: [(area proportion <float>, cover <int>), ...], ...}
-        speciesTable = {}
-        for stand_i in range(len(matrix_species)):
-            # get cover:
-            # a single cover value for all the species in the stand.
-            # set a default cover
-            stand_cover = 0
-            try:
-                rawValues = matrix_covers[stand_i][1]
-                stand_cover = int([tup[1] for tup in rawValues if tup[0] == planttypeKey][0])
-            except:
-                sourceStandID = self.stands[stand_i].id
-                txt = 'unable to get cover of %s from planttype related table (source stand ID: %s)' \
-                    % (planttypeKey, sourceStandID)
-                self.notifier.add(stepName, 'warning', txt)
-                
-            # get species list:
-            # stand_species = [speciesCode <int>, ...]
-            rawValue = matrix_species[stand_i][1]
-            stand_species = []
-            if hasattr(rawValue, 'split') and rawValue != '':
-                rawValue_splitted = rawValue.split(',')
-                for splitValue in rawValue_splitted:
-                    if isIntable(splitValue):
-                        if int(splitValue) in speciesDict.keys():
-                            stand_species.append(int(splitValue))
-                        else:
-                            sourceStandID = self.stands[stand_i].id
-                            txt = "Species code %s wasn't found in species list. source stand id: %s." \
-                                % (splitValue, sourceStandID)
-                            self.notifier.add(stepName, 'warning', txt)
-                    else:
-                        sourceStandID = self.stands[stand_i].id
-                        txt = "Species code %s failed to be turned into an integer. source stand id: %s." \
-                            % (splitValue, sourceStandID)
-                        self.notifier.add(stepName, 'warning', txt)
-
-            # append the final tuple: (area, cover)
-            areaProportion = matrix_species[stand_i][0]
-            newTup = (areaProportion, stand_cover)
-            for species in stand_species:
-                if species in speciesTable.keys():
-                    speciesTable[species].append(newTup)
-                else:
-                    speciesTable[species] = [newTup]
-
-        # LOGIC:
-        # for every species: calculate its weighted value
-        # [(speciesCode <int>, weighted value <float>), ...]
-        speciesRanks = []
-        for speciesCode, tupList in speciesTable.items():
-            size_sum = sum([tup[0] for tup in tupList])
-            cover_sum = sum([tup[0]*tup[1] for tup in tupList])
-            weightedValue = size_sum * cover_sum
-            newTup = (speciesCode, weightedValue)
-            speciesRanks.append(newTup)
-        
-        # sort by weighted value (descending)
-        speciesRanks.sort(key=lambda x: x[1], reverse = True)
-        # weightedValue must be > 0
-        codes = [speciesCode for speciesCode, weightedValue in speciesRanks if weightedValue > 0][:3]
-        names = [speciesDict[code] for code in codes]
-        outdict = {
-            'codes': ','.join([str(x) for x in codes]),
-            'names': ','.join([str(x) for x in names])
-        }
-        return outdict
-    
-    def c__naturalvalues(self):
-        """
-        Each row value is a concat with ",",
-        remove unwanted values and duplications.
-        If "אין" coexists with other values - remove it.
-        """
-        stepName = 'naturalvalues'
-
-        domainValues = [
-            None,
-            "אין",
-            "מינים בסכנת הכחדה",
-            "ריכוז מינים מוגנים",
-            "עצים או שיחי תפארת",
-            "בית-גידול לח",
-            "אתרי קינון",
-            "מצוקים",
-            "מאורות יונקים",
-            "נוכחות צבאים",
-            "ערכי טבע דוממים",
-            "מטע או בוסתן עזוב",
-            "אחר",
-        ]
-        defaultValue = domainValues[1] #'אין'
-        elseValue = domainValues[12] #'אחר'
-        resultsDict = {
-            'main': defaultValue,
-            'details': None
-        }
-        valuesToOmit = ["", " "]
-
-        matrix = self.getMatrix_self(50075)
-
-        # VALIDATION:
-        validValues = []
-        for polygonTup in matrix:
-            #rawValues is a list of row values (string),
-            #each string is a concatenation with ","s.
-            rawValue = polygonTup[1]
-            if rawValue:
-                #rawValue of None/""/" " won't get here.
-                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
-                for splitValue in splitList:
-                    if splitValue in domainValues and splitValue not in valuesToOmit:
-                        validValues.append(splitValue)
-        
-        # LOGIC:
-        if validValues:
-            #sort by frequency, remove duplications
-            validValues_sorted = freqSorted(validValues)
-            if elseValue in validValues_sorted:
-                #1) move elseValue to end (if exists)
-                validValues_sorted = makeLast(validValues_sorted, elseValue)
-                #2) copy free text from the details field
-                details_matrix = self.getMatrix_self(50103)
-                detailsList = [tup[1] for tup in details_matrix]
-                detailsList = removeDup(detailsList)
-                for valueToRemove in ['',' ', None]:
-                    while valueToRemove in detailsList:
-                        detailsList.remove(valueToRemove)
-                if detailsList:
-                    # concatenate using "; "
-                    resultsDict['details'] = '; '.join(detailsList)
-            #remove default value if it exists along with other values
-            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
-                validValues_sorted.remove(defaultValue)
-            #concatenate:
-            resultsDict['main'] = ",".join(validValues_sorted)
-            return resultsDict
-        else:
-            #list is empty, return defaultValue
-            return resultsDict
-
-    def c__roadsidesconditions(self):
-        """
-        Each row value is a concat with ",",
-        remove unwanted values and duplications.
-        If "תקין" coexists with other values - remove it.
-        """
-        stepName = 'roadsidesconditions'
-
-        valuesToOmit = ["", " "]
-        defaultValue = "תקין"
-        elseValue = "אחר"
-        resultsDict = {
-            'main': defaultValue,
-            'details': None
-        }
-
-        matrix = self.getMatrix_self(50076)
-
-        # VALIDATION:
-        validValues = []
-        for polygonTup in matrix:
-            #rawValues is a list of row values (string),
-            #each string is a concatenation with ","s.
-            rawValue = polygonTup[1]
-            if rawValue:
-                #rawValue of None/""/" " won't get here.
-                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
-                for splitValue in splitList:
-                    if splitValue not in valuesToOmit:
-                        validValues.append(splitValue)
-        
-        # LOGIC:
-        if validValues:
-            #sort by frequency, remove duplications
-            validValues_sorted = freqSorted(validValues)
-            if elseValue in validValues_sorted:
-                #1) move elseValue to end (if exists)
-                validValues_sorted = makeLast(validValues_sorted, elseValue)
-                #2) copy free text from the details field
-                details_matrix = self.getMatrix_self(50104)
-                detailsList = [tup[1] for tup in details_matrix]
-                detailsList = removeDup(detailsList)
-                for valueToRemove in ['',' ', None]:
-                    while valueToRemove in detailsList:
-                        detailsList.remove(valueToRemove)
-                if detailsList:
-                    # concatenate using "; "
-                    resultsDict['details'] = '; '.join(detailsList)
-            #remove default value if it exists along with other values
-            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
-                validValues_sorted.remove(defaultValue)
-            #concatenate:
-            resultsDict['main'] = ",".join(validValues_sorted)
-            return resultsDict
-        else:
-            #list is empty, return defaultValue
-            return resultsDict
-
-    def c__limitedaccessibilitytype(self):
-        """
-        Each row value is a concat with ",",
-        remove unwanted values and duplications.
-        If "תקין" coexists with other values - remove it.
-        """
-        stepName = 'limitedaccessibilitytype'
-
-        valuesToOmit = ["", " "]
-        defaultValue = "אין"
-        elseValue = "אחר"
-        resultsDict = {
-            'main': defaultValue,
-            'details': None
-        }
-
-        matrix = self.getMatrix_self(50077)
-
-        # VALIDATION:
-        validValues = []
-        for polygonTup in matrix:
-            #rawValues is a list of row values (string),
-            #each string is a concatenation with ","s.
-            rawValue = polygonTup[1]
-            if rawValue:
-                #rawValue of None/""/" " won't get here.
-                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
-                for splitValue in splitList:
-                    if splitValue not in valuesToOmit:
-                        validValues.append(splitValue)
-        
-        # LOGIC:
-        if validValues:
-            #sort by frequency, remove duplications
-            validValues_sorted = freqSorted(validValues)
-            if elseValue in validValues_sorted:
-                #1) move elseValue to end (if exists)
-                validValues_sorted = makeLast(validValues_sorted, elseValue)
-                #2) copy free text from the details field
-                details_matrix = self.getMatrix_self(50105)
-                detailsList = [tup[1] for tup in details_matrix]
-                detailsList = removeDup(detailsList)
-                for valueToRemove in ['',' ', None]:
-                    while valueToRemove in detailsList:
-                        detailsList.remove(valueToRemove)
-                if detailsList:
-                    # concatenate using "; "
-                    resultsDict['details'] = '; '.join(detailsList)
-            #remove default value if it exists along with other values
-            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
-                validValues_sorted.remove(defaultValue)
-            #concatenate:
-            resultsDict['main'] = ",".join(validValues_sorted)
-            return resultsDict
-        else:
-            #list is empty, return defaultValue
-            return resultsDict
-
-    def c__foresthazards(self):
-        """
-        Each row value is a concat with ",",
-        remove unwanted values and duplications.
-        If "אין" coexists with other values - remove it.
-        """
-        stepName = 'foresthazards'
-
-        valuesToOmit = ["", " "]
-        defaultValue = "אין"
-        elseValue = "אחר"
-        resultsDict = {
-            'main': defaultValue,
-            'details': None
-        }
-
-        matrix = self.getMatrix_self(50078)
-
-        # VALIDATION:
-        validValues = []
-        for polygonTup in matrix:
-            #rawValues is a list of row values (string),
-            #each string is a concatenation with ","s.
-            rawValue = polygonTup[1]
-            if rawValue:
-                #rawValue of None/""/" " won't get here.
-                splitList = splitAndRemoveSpacesFromEnds(rawValue, ',')
-                for splitValue in splitList:
-                    if splitValue not in valuesToOmit:
-                        validValues.append(splitValue)
-        
-        # LOGIC:
-        if validValues:
-            #sort by frequency, remove duplications
-            validValues_sorted = freqSorted(validValues)
-            if elseValue in validValues_sorted:
-                #1) move elseValue to end (if exists)
-                validValues_sorted = makeLast(validValues_sorted, elseValue)
-                #2) copy free text from the details field
-                details_matrix = self.getMatrix_self(50106)
-                detailsList = [tup[1] for tup in details_matrix]
-                detailsList = removeDup(detailsList)
-                for valueToRemove in ['',' ', None]:
-                    while valueToRemove in detailsList:
-                        detailsList.remove(valueToRemove)
-                if detailsList:
-                    # concatenate using "; "
-                    resultsDict['details'] = '; '.join(detailsList)
-            #remove default value if it exists along with other values
-            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
-                validValues_sorted.remove(defaultValue)
-            #concatenate:
-            resultsDict['main'] = ",".join(validValues_sorted)
-            return resultsDict
-        else:
-            #list is empty, return defaultValue
-            return resultsDict
-
-    def c__degenerationindex(self):
-        """
-        Calculate stand's vital cover average, and return its category <str>.
-        """
-        stepName = 'degenerationindex'
-
-        domainValues = {
-            #value <str>: (ceil of avg <int>, max <int>),
-            "אין": (0, 0),
-            "זניח (3%-0%)": (2, 3),
-            "מועט (10%-3%)": (7, 10),
-            "בינוני (33%-10%)": (22, 33),
-            "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
-        }
-        defaultValue = "אין"
-        backwardsList = [(v[1],k) for k,v in domainValues.items()]
-        matrix = self.getMatrix_self(50072)
-
-        # VALIDATION:
-        validTuples = []
-        for i, polygonTup in enumerate(matrix):
-            value = polygonTup[1]
-            if value in domainValues:
-                validTuples.append(polygonTup)
-            elif value is not None:
-                stand_ID = self.stands[i].id
-                txt = 'value (%s) from field (stand id %s) is invalid.' % (value, stand_ID)
-                self.notifier.add(stepName, 'warning', txt)
-        
-        # LOGIC:
-        if validTuples:
-            weighted_value = sum([areaProportion*domainValues[category][0] for areaProportion,category in validTuples])
-            resultCategory = toCategory(weighted_value, backwardsList)
-            return resultCategory
-        else:
-            return defaultValue
-
-    def c__presence(self, mode):
-        """
-        Takes mode as method input. 
-        Different modes have different field codes and domain values.
-        Process: weighted sum of index.
-        Input:
-        - mode <str>: 'conifer' / 'broadleaf'.
-        Returns: category <str>
-        """
-        stepName = 'presenceconifertype'
-
-        domainValues_dict = {
-            'conifer': [
-                'אין',
-                '1-20',
-                '21-50',
-                '51-100',
-                'מעל 100 '
-            ],
-            'broadleaf': [
-                'אין',
-                '1-5',
-                '6-10',
-                '11-20',
-                'מעל 20 '
-            ]
-        }
-        fieldCode_dict = {
-            'conifer': 50063,
-            'broadleaf': 50065
-        }
-
-        domainValues = domainValues_dict[mode]
-        fieldCode = fieldCode_dict[mode]
-
-        matrix = self.getMatrix_self(fieldCode)
-        valid_tuples = []
-
-        # VALIDATION:
-        for proportion, raw_value in matrix:
-            if raw_value in domainValues:
-                valid_tuples.append((proportion, raw_value))
-            elif raw_value is not None:
-                fieldAlias = fieldsDict[fieldCode].alias
-                txt = 'invalid value (%s) in field "%s".' % (raw_value, fieldAlias)
-                self.notifier.add(stepName, 'warning', txt)
-
-        # LOGIC:
-        if valid_tuples:
-            #numerator = sum of (area proportion * index)
-            numerator = sum([proportion*domainValues.index(category) for proportion, category in valid_tuples])
-            #denominator = sum of area proportions, equals 1 if len(valid_tuples) == 2.
-            denominator = sum([proportion for proportion, category in valid_tuples])
-            quotient = normal_round(numerator/denominator)
-            result = domainValues[quotient]
-            return result
-        else:
-            # return the default value 'אין'.
-            return domainValues[0]
-
-    def c__invasivespecies(self):
-        """
-        Takes rows from invasive species related table,
-        for every unique invasive species - 
-        in case it appears in both polygons - take the bigger epicenter.
-        Returns a dict of {incasive species <str>: epicenter <str>, ...}
-        """
-        stepName = 'invasivespecies'
-
-        # import the domain instead of explicitly write it
-        domainValues_invasiveSpecies = listCodedValues(org.stands.workspace, fieldsDict[51001].domain)
-        domainValues_epicenter = [
-            'אין',
-            'מוקד קטן',
-            'מוקד בינוני',
-            'מוקד גדול',
-        ]
-        default_empty_dict = {'אין': 'אין'}
-
-        matrix = self.getMatrix_related('st1', [51001,51002])
-
-        # VALIDATION & ORGANIZING:
-        valid_Tuples = [] #all valid [(invasiveSp, epicenter), ...]
-
-        for polygon in matrix:
-            rows = polygon[1]
-            for invasiveSp, epicenter in rows:
-                invasiveSp_valid = True
-                epicenter_valid = True
-                empty_valid = True
-
-                # validate invasiveSp:
-                if invasiveSp is None:
-                    invasiveSp_valid = False
-                elif invasiveSp not in domainValues_invasiveSpecies:
-                    txt = 'invasive species (%s) does not appear in domain.'
-                    self.notifier.add(stepName, 'warning', txt)
-                    invasiveSp_valid = False
-
-                # validate epicenter:
-                if epicenter is None:
-                    epicenter_valid = False
-                elif epicenter not in domainValues_epicenter:
-                    txt = 'epicenter (%s) does not appear in domain.'
-                    self.notifier.add(stepName, 'warning', txt)
-                    epicenter_valid = False
-                
-                # validate empty tuples:
-                if 'אין' in [invasiveSp, epicenter]:
-                    # skip any case of epicenter or invasive species is 'אין'
-                    empty_valid = False
-                
-                # end validation:
-                if invasiveSp_valid and epicenter_valid and empty_valid:
-                    tup = (invasiveSp, epicenter)
-                    valid_Tuples.append(tup)
-                else:
-                    # for readability,
-                    # code-wise it is redundant redundant
-                    continue
-
-        # LOGIC:
-        if valid_Tuples:
-            result_dict = {} # {invasiveSp: biggest epicenter, ...}
-            for invasiveSp, epicenter in valid_Tuples:
-                if invasiveSp not in result_dict.keys():
-                    result_dict[invasiveSp] = epicenter
-                else:
-                    existingEpicenter_index = domainValues_epicenter.index(result_dict[invasiveSp])
-                    newEpicenter_index = domainValues_epicenter.index(epicenter)
-                    if newEpicenter_index > existingEpicenter_index:
-                        result_dict[invasiveSp] = epicenter
-            # dict to list of tuples:
-            #@ deprecated:
-            #result_list = [(invasiveSp, epicenter) for invasiveSp, epicenter in result_dict.items()]
-            return result_dict
-        else:
-            return default_empty_dict
-
-    def c__planttype(self):
-        """
-        Takes plant type rows from related table of source polygons,
-        validates their values, and multiply them by the area proportion
-        of their polygon.
-        Returns a dictionary of every plant type & its percent:
-        {plant type 1 <int>: percent <int>, ...}
-        """
-        stepName = 'planttype'
-        # Empty dictionary:
-        plantType_valuesList = {
-            "צומח_גדות_נחלים": [],
-            "עצים": [],
-            "שיחים": [],
-            "בני_שיח": [],
-            "עשבוני": [],
-            "ללא_כיסוי": [],
-            "מינים_פולשים": []
-        }
-        matrix = self.getMatrix_related('st2', [52001,52002])
-
-        # VALIDATION & ORGANIZING:
-        for polygon in matrix:
-            proportion = polygon[0]
-            rows = polygon[1]
-            # validation includes: 
-            # 1 - plant type is from recognized categories (mandatory),
-            # 2 - percent is intable (mandatory), 
-            # 3 - int of percent is a multiple of 10,
-            
-            # create an empty dict based on plantType_valuesList keys:
-            polygon_plantTypeDict = {pType:0 for pType in plantType_valuesList.keys()}
-
-            for plantType, percent in rows:
-                try:
-                    polygon_plantTypeDict[plantType] += int(percent)
-                    if int(percent) % 10 != 0:
-                        txt = 'percent (%s) of input polygon is not a multiple of 10.' % percent
-                        self.notifier.add(stepName, 'warning', txt)
-                except KeyError:
-                    txt = 'plant type (%s) of input polygon is invalid.' % plantType
-                    self.notifier.add(stepName, 'warning', txt)
-                except ValueError:
-                    txt = 'percent (%s) of input polygon is not convertable to number.' % percent
-                    self.notifier.add(stepName, 'warning', txt)# --- end of validation ---
-
-            # append the sum of every plant type to plantType_valuesList[plantType]
-            for plantType, percent in polygon_plantTypeDict.items():
-                # each polygon gets one value in plantType_valuesList
-                # correspond to its order within self.stands.
-                plantType_valuesList[plantType].append(percent)
-        
-        # LOGIC:
-        # output dictionary:
-        plantTypeDict = {}
-        for plantType, valuesList in plantType_valuesList.items():
-            # calculate a weighted value by 
-            # multiplying each value with its area proportion.
-            weightedValues = [percent*self.stands[i].areaProportion for i, percent in enumerate(valuesList)]
-            weightedValue = sum(weightedValues)
-            # round to nearest 10
-            roundedValue = int(10*normal_round(weightedValue/10))
-            plantTypeDict[plantType] = roundedValue
-        # 
-        percentSum = sum(plantTypeDict.values())
-        if percentSum < 100 and percentSum != 0:
-            # modify to make sum == 100, while preserving ratios
-            ratio = 100/percentSum
-            plantTypeDict = {pType: percent*ratio for pType, percent in plantTypeDict.items()}
-            # convert to list before passing to function
-            plantTypes = []
-            percents = []
-            for pType, percent in plantTypeDict.items():
-                plantTypes.append(pType)
-                percents.append(percent)
-            percents_rounded = roundToNearestBase(percents,10)
-            plantTypeDict = {plantTypes[i]:percents_rounded[i] for i in range(len(plantTypes))}
-        return plantTypeDict
-
-    def c__covtypeRel(self):
-        """
-        Takes covtype species and proportions from source polygons'
-        related tables, calculates each species' weighted value,
-        and round the numbers to
-        Returns a list of tuples = [
-            (codedValue <str>, proportion <int>),
-            ...
-        ]
-        """
-        stepName = 'covtypeRel'
-        
-        #A dict of median values for every 'generaldensity' value:
-        generalDensity_medians = {
-            None: 0,
-            "אין עצים": 0,
-            "לא רלוונטי": 5,
-            "1-10": 5,
-            "11-20": 15,
-            "21-40": 30,
-            "41-60": 50,
-            "61-100": 80,
-            "מעל  100": 100,
-        }
-        domainValues = listCodedValues(arcpy.env.workspace, fieldsDict[53001].domain)
-
-        matrix = self.getMatrix_related('st3', [53001,53002])
-        generalDensity_matrix = self.getMatrix_self(50042)
-
-        #debug data:
-        """
-        matrix = [
-            (
-                0.63,
-                [
-                    ('1103', 9),
-                    ('1200', 1)
-                ]
-            ),
-            (
-                0.37,
-                [
-                    ('1105', 1),
-                    ('1103', 7),
-                    ('3111', 1),
-                    ('2910', 1)
-                ]
-            )
-        ]
-        generalDensity_matrix = [
-            (0.63, "21-40"),
-            (0.37, "11-20")
-        ]
-        """
-
-        resultsDict = {}
-
-        # VALIDATION & ORGANIZING:
-        # 1 - domTree appears in the domain possibilities (notify if not),
-        # 2 - proportion is intable (mandatory)
-        for polygonIndex, polygon in enumerate(matrix):
-            areaProportion = polygon[0]
-            rows = polygon[1]
-            polygon_Generaldensity_median = generalDensity_medians[generalDensity_matrix[polygonIndex][1]]
-            for domTree, proportion in rows:
-                # validation
-                if domTree not in domainValues:
-                    txt = 'tree code (%s) of input polygon does not appear in domain.' % domTree
-                    self.notifier.add(stepName, 'warning', txt)
-                try:
-                    weightedValue = int(proportion)*areaProportion*polygon_Generaldensity_median
-                except ValueError:
-                    txt = 'percent (%s) of input polygon is not convertable to number.' % proportion
-                    self.notifier.add(stepName, 'warning', txt)
-                # --- end of validation ---
-
-                if domTree in resultsDict.keys():
-                    resultsDict[domTree] += weightedValue
-                else:
-                    resultsDict[domTree] = weightedValue
-
-        # LOGIC:
-        totalSum = sum(resultsDict.values())
-        if totalSum != 0:
-            domTrees = []
-            proportions = []
-            for domType, proportion in resultsDict.items():
-                domTrees.append(domType)
-                # notice I devide by total sum, and multiply by 10,
-                # to make the proportion 10-based.
-                proportions.append(10*proportion/totalSum)
-            percents_rounded = roundToNearestBase(proportions, 1)
-            # remove zeros
-            resultsDict = [tuple([domTrees[i],int(percents_rounded[i])]) for i in range(len(domTrees)) if percents_rounded[i]!=0]
-            return resultsDict
-        else:
-            return []
-
-    def c__vitalforest(self):
-        """
-        Takes values from vital forest related tables,
-        after validation, each impact median is multiplied by 
-        its polygon's area proportion. The next step is to sum
-        this number for each defect, and then convert the sum
-        to category.
-        Returns:
-        defectsCategories = {forest defect <str>: percent impact <str>, ...}
-        ---------------
-        #@ this method does not deal with defect 'אחר' yet.
-        """
-        stepName = 'vital forest'
-
-        defects_domainValues = [
-            'עיכוב בהתפתחות העצים',
-            'יחס צמרת קטן',
-            'גזעים דקים ביחס לגובה',
-            'כותרת דלילה',
-            'שטח שרובו שרוף (ללא התחדשות עדיין)',
-            'התייבשות החלק העליון בכותרת',
-            'הצהבת כותרת (כלורוזיס)',
-            'רקבונות',
-            'קילופים או פצעי גיזום גדולים',
-            'ריבוי גזעים (באיקליפטוס, ר"ע מינים מסוימים)',
-            'אחר (פרט בהערות)',
-        ]
-        impact_table = {
-            'אין': (0, 0),
-            'זניח (3%-0%)': (2, 3),
-            'מועט (10%-3%)': (7, 10),
-            'בינוני (33%-10%)': (22, 33),
-            'גבוה (66%-33%)': (50, 66),
-            'גבוה מאוד (מעל 66%)': (88, 100)
-        }
-        impact_table_backwardsList = [(v[1],k) for k,v in impact_table.items()]
-
-        elseValue = defects_domainValues[len(defects_domainValues)-1] #(last)
-
-        matrix = self.getMatrix_related('st4', [54001,54002])
-
-        # VALIDATION & ORGANIZING:
-        # 1 - defect appears in domain possibilities (notify if not),
-        # 2 - percent impact appears in impact_table
-        # defectsAndSums = {forest defect <str>: sum(median*areaProportion) <float>}
-        defectsAndSums = {}
-        for polygon_tup in matrix:
-            polygon_areaProportion = polygon_tup[0]
-            for row_tup in polygon_tup[1]:
-                defect = row_tup[0]
-                impact = row_tup[1]
-                if defect not in defects_domainValues:
-                    txt = 'invalid value %s - not from domain.' % defect
-                    self.notifier.add(stepName, 'warning', txt)
-                    continue
-                elif defect == elseValue:
-                    #@ impact == אחר...
-                    continue
-                else:
-                    # the defect value is from the domains AND is not elseValue.
-                    # validate impact:
-                    impact_isValid = impact in impact_table.keys()
-                    if impact_isValid:
-                        # calculate with area proportion and add to dictionary.
-                        impactMedian = impact_table[impact][0]
-                        if impactMedian == 0:
-                            # don't calculate it the impact median is 0.
-                            continue
-                        currentResult = polygon_areaProportion * impactMedian
-                        if defect in defectsAndSums.keys():
-                            defectsAndSums[defect] += currentResult
-                        else:
-                            defectsAndSums[defect] = currentResult
-                    else:
-                        txt = 'invalid value %s - not from domain.' % impact
-                        self.notifier.add(stepName, 'warning', txt)
-                        continue
-        
-        # LOGIC:
-        # at this point defectsAndSums should has the data,
-        # if it does - convert every sum of impact to category.
-        
-        #defectsCategories is the dict to be returned
-        #defectsCategories = {forest defect <str>: percent impact <str>, ...}
-        defectsCategories = {}
-        for defect, sumImpact in defectsAndSums.items():
-            category = toCategory(sumImpact, impact_table_backwardsList)
-            defectsCategories[defect] = category
-
-        return defectsCategories
-
-    def c__planttype_desc(self, planttypeDict):
-        """
-        Takes the output of c__planttype() method:
-        - planttypeDict: dict with every plant type and its percent:
-            {plant type 1 <str>: percent <int>, ...}
-        Returns a concatenated <str> as follows:
-        "plant type 1 - percent, plant type 2 - percent, ..."
-        Every plant type text will be replaced by a short version
-        according to a dictionary. 
-        Not sorted by percent value.
-        """
-        planttypeShortVersions = {
-            "עצים": "עצ",
-            "שיחים": "שיח",
-            "בני_שיח": "ב.שיח",
-            "עשבוני": "עשב",
-            "ללא_כיסוי": "ל.כ",
-            "צומח_גדות_נחלים": "צ.ג.נ",
-            "מינים_פולשים": "מ.פ"
-        }
-        tupList = [(k,v) for k,v in planttypeDict.items()]
-        #tupList.sort(key=lambda x: x[1], reverse = True)
-        #strList = ["plant type 1 - percent", "plant type 2 - percent"]
-        strList = []
-        for tup in tupList:
-            #insert the shorter version of covtype string:
-            planttype = planttypeShortVersions[tup[0]]
-            proportion = tup[1]
-            txt = "%s - %s" % (planttype, proportion)
-            strList.append(txt)
-        
-        if strList:
-            concat = ", ".join(strList)
-            return concat
-        else:
-            return None
-
-    def c__covtype_desc(self, covtypeList):
-        """
-        Takes the output of v__covtypeRel() method:
-        - covtypeList: list of tuples [
-            (codedValue <str>, proportion <int>), ...
-            ].
-        Concatenate to the following string:
-        "species name 1 - proportion, species name 2 - proportion, ..."
-
-        -One exception for the next case:
-            'שטח פתוח' proportion 10 code 9990 → return 'אין עצים'.
-        """
-        stepName = 'covtype_desc'
-        emptyValue = 'אין עצים'
-        if len(covtypeList) == 0:
-            return emptyValue
-        #Handle the exception of 'שטח פתוח':
-        elif len(covtypeList) == 1 and int(covtypeList[0][0]) == 9990:
-            return emptyValue
-        else:
-            #strList - ["species name 1 - proportion", "species name 2 - proportion", ...]
-            strList = [] 
-            for code, proportion in covtypeList:
-                #try-except system to handle errors during:
-                #code<str> → code<int> → name<str>
-                try:
-                    codeInt = int(code)
-                    name = speciesDict[codeInt]
-                except ValueError as e:
-                    #code is not intable.
-                    key = e.args[0]
-                    txt = 'Unable to turn species code value (%s) into an integer.'\
-                        % (key)
-                    self.notifier.add(stepName, 'warning', txt)
-                    continue
-                except KeyError as e:
-                    #Species code: not found in speciesDict.
-                    #Notifty and move on.
-                    key = e.args[0]
-                    txt = 'Species code value (%s) is not found in: "%s".'\
-                        % (key, speciesDict['__jsonFileName__'])
-                    self.notifier.add(stepName, 'warning', txt)
-                    continue
-                else:
-                    #Conditions are met:
-                    #-code is intable.
-                    #-species code is in species dict.
-                    speciesText = "%s - %s" % (name, proportion)
-                    strList.append(speciesText)
-            
-            if strList:
-                concat = ", ".join(strList)
-                return concat
-            else:
-                return None
-
-    def c__invasivespecies_desc(self, invasivespeciesDict):
-        """
-        Takes the output of c__invasivespecies() method:
-        - invasivespeciesDict: dict with every invasive species and its epicenterType:
-            {invasiveSpecies <str>: epicenterType <str>, ...}
-        Returns a concatenated <str> as follows:
-        "invasive species 1 - epicenterType, invasive species 2 - epicenterType, ..."
-        Sorted by epicenterType in descending order.
-        """
-        epicenterType_sorted = [
-            None,
-            "אין",
-            "מוקד קטן",
-            "מוקד בינוני",
-            "מוקד גדול",
-        ]
-        defaultValue = epicenterType_sorted[1]
-        tupList = [(k,v) for k,v in invasivespeciesDict.items()]
-        #Sort by the index of the epicenterType (magnitude):
-        tupList.sort(key=lambda x: epicenterType_sorted.index(x[1]), reverse = True)
-
-        #strList = ["defect type 1 - percent impact", "defect type 2 - percent impact"]
-        strList = []
-        for tup in tupList:
-            invasiveSpecies = tup[0]
-            epicenterType = tup[1]
-            if epicenterType not in epicenterType_sorted[:2]:
-                # epicenterType is not None or 'אין'
-                txt = "%s - %s" % (invasiveSpecies, epicenterType)
-                strList.append(txt)
-        
-        if strList:
-            concat = ", ".join(strList)
-            return concat
-        else:
-            return defaultValue
-
-    def c__vitalforest_desc(self, vitalForestDict):
-        """
-        Takes the output of c__vitalforest() method:
-        - vitalForestDict: dict with every defect type and its percent impact:
-            {forest defect <str>: percent impact <str>, ...}
-        Returns a concatenated <str> as follows:
-        "defect type 1 - percent impact, defect type 2 - percent impact, ..."
-        Sorted by percent value in descending order.
-        """
-        percentValues_sorted = [
-            'אין',
-            'זניח (3%-0%)',
-            'מועט (10%-3%)',
-            'בינוני (33%-10%)',
-            'גבוה (66%-33%)',
-            'גבוה מאוד (מעל 66%)'
-        ]
-        tupList = [(k,v) for k,v in vitalForestDict.items()]
-        #Sort by the index of the percent impact (magnitude):
-        tupList.sort(key=lambda x: percentValues_sorted.index(x[1]), reverse = True)
-
-        #strList = ["defect type 1 - percent impact", "defect type 2 - percent impact"]
-        strList = []
-        for tup in tupList:
-            defecttype = tup[0]
-            proportion = tup[1]
-            txt = "%s - %s" % (defecttype, proportion)
-            strList.append(txt)
-        
-        if strList:
-            concat = ", ".join(strList)
-            return concat
-        else:
-            return None
-
-    def c__logiclayers(self):
-        """
-        Calculates product stand's primary and secondary layers' attributes:
-        forest layer, veg form, layer cover, layer desc.
-        """
-        stepName = 'logiclayers'
-        #The method returns outDict
-        outDict = {
-            "primary": LayerResult(),
-            "secondary": LayerResult()
-        }
-
-        #This step is unique to unite stands, as polygon layers are
-        #created during calculateandwrite.
-        self.layers = self.setLayers()
-
-        #These are layer nums (4-1) that were assigned during classification of
-        #primary and secondary layers:
-        #(in order not to re-assign them)
-        layerNumsToInvestigate = []
-
-        validLayers = [layer for layer in self.layers.values() if layer.isValid]
-        validLayers.sort(key=lambda x: x.layerNum, reverse = True)
-        for threshold_layerCoverNum in [3,2]:
-            for layer in validLayers:
-                #Before inspecting, make sure there is room to insert
-                #more layers to outDict:
-                roomForAssignment = False in [layer.assigned for layer in outDict.values()]
-                if (layer.layerNum in [4,3,2]) and roomForAssignment:
-                    #convert cover <str> to coverNum <int>:
-                    if layer.layerCover_num >= threshold_layerCoverNum and\
-                        layer.layerNum not in layerNumsToInvestigate:
-                        #insert it as primary or secondary layer:
-                        if not outDict['primary'].assigned:
-                            outDict['primary'].assignLayer(layer, True)
-                            layerNumsToInvestigate.append(layer.layerNum)
-                        elif not outDict['secondary'].assigned:
-                            outDict['secondary'].assignLayer(layer, False)
-                            layerNumsToInvestigate.append(layer.layerNum)
-        
-        #Sub-forest inspection:
-        #Assign and set vegForm of sub-forest layer, in a way
-        #that is different from the forest layers.
-        #Make sure there is room to insert
-        #more layers to outDict:
-        roomForAssignment = False in [layer.assigned for layer in outDict.values()]
-        if roomForAssignment:
-            inspectedLayer = self.layers['sub']
-            #Get the vecant layer order to assign to:
-            for order in ['primary', 'secondary']:
-                if not outDict[order].assigned:
-                    layerOrder = order
-                    break
-            #Replicate self.planttype to a local variable that is
-            #not referenced, because its values might get changed.
-            planttype = {k:v for k,v in self.v__planttype.items()}
-            #lowForest booleans, self-describing:
-            lowForest_boolList = [inspectedLayer.isConiferForest, inspectedLayer.isBroadleafForest]
-            treesPresence = True in lowForest_boolList
-            if treesPresence:
-                #Set vegform:
-                if lowForest_boolList == [True, True]:
-                    vegForm = 'יער מעורב נמוך'
-                elif lowForest_boolList == [True, False]:
-                    vegForm = 'יער מחטני נמוך'
-                elif lowForest_boolList == [False, True]:
-                    vegForm = 'יער רחבי עלים נמוך'
-                #Cover based on 'עצים'. Not lower than 'פזור', hence 4+ .
-                percent = max([planttype['עצים'], 4])
-                cover = toCategory(percent, layerCover_table1_backwardsList)
-                outDict[layerOrder].assign(1, cover)
-                outDict[layerOrder].setVegForm(vegForm)
-            elif planttype['צומח_גדות_נחלים'] >= 30:
-                percent = planttype['צומח_גדות_נחלים']
-                vegForm = 'צומח_גדות_נחלים'
-                #translate:
-                vegForm = translate(vegForm, subForestVegForm_translation)
-                cover = toCategory(percent, layerCover_table1_backwardsList)
-                outDict[layerOrder].assign(1, cover)
-                outDict[layerOrder].setVegForm(vegForm)
-            else:
-                planttype['שיחים'] += planttype['עצים'] + planttype['צומח_גדות_נחלים']
-                planttype['עצים'] = 0
-                planttype['צומח_גדות_נחלים'] = 0
-                #The vegforms relevant for this step:
-                vegForms = ['שיחים', 'בני_שיח', 'עשבוני']
-                #vegForms_covers is a list of tuples: [(vegForm <str>, cover percent <int>), ...]
-                #A tuple would be added only if cover percent >= 10 .
-                vegForms_covers = [(vegform, planttype[vegform]) for vegform in vegForms if planttype[vegform] >= 10]
-                if vegForms_covers:
-                    #pick the first tuple, for it's the highest hierarchy of vegForms:
-                    tup = vegForms_covers[0]
-                    vegForm = tup[0]
-                    #translate:
-                    vegForm = translate(vegForm, subForestVegForm_translation)
-                    percent = tup[1]
-                    cover = toCategory(percent, layerCover_table1_backwardsList)
-                    outDict[layerOrder].assign(1, cover)
-                    outDict[layerOrder].setVegForm(vegForm)
-                else:
-                    #No veg form of the three mentioned above has cover >= 10:
-                    #go to 'ללא כיסוי'.
-                    vegForm = 'ללא_כיסוי'
-                    #translate:
-                    vegForm = translate(vegForm, subForestVegForm_translation)
-                    #Cover returns 'גבוה (מעל 66%)'
-                    cover = toCategory(100, layerCover_table1_backwardsList)
-                    #Assign:
-                    outDict[layerOrder].assign(1, cover)
-                    outDict[layerOrder].setVegForm(vegForm)
-                    #Add warning:
-                    txt = 'sub-forest layer "%s".' % vegForm
-                    self.notifier.add(stepName, 'warning', txt)
-        
-
-        #create layer description string for primary and secondary layers
-        #(as long as the layer is assigned).
-        #For every assigned layer, call the finalize() method.
-        for layerRepr in outDict.values():
-            layerRepr.finalize()
-        
-        return outDict
-
-    def c__covtype(self, covtypeList, logiclayersObj):
-        """
-        - covtypeList: list of tuples [
-            (codedValue <str>, proportion <int>), ...
-            ].
-        - logiclayersObj: output dict of c__logiclayers {
-            'primary': LayerResult,
-            'secondary': LayerResult
-            }
-        """
-        stepName = 'covtype'
-        
-        primaryLayer = logiclayersObj['primary']
-        secondaryLayer = logiclayersObj['secondary']
-        
-        #### Prepare hierarchical data structure: ####
-        root.resetValues()
-        
-        #debug:
-        """
-        covtypeList = [("3042", 5), ("3044", 5)]
-        """
-        #Set values of relevant nodes:
-        for codedValue,proportion in covtypeList:
-            root.findAndSet(codedValue, proportion)
-        iterableNodes = root.getNodesWithValue()
-        #create a result object for covtype:
-        resultObj = CovtypeResult(self, speciesCompositionCoordinator, forestVegFormCoordinator)
-
-        # LOGIC:
-        if not primaryLayer.isForestLayer:
-            """
-            Assigns the layer of subforest.
-            Notice: covtype can only be one of the following:
-            שיחייה, בתה, עשבוני, צומח גדות נחלים
-            and can not be:
-            יער נמוך (any of its options)
-            so, in case lrimary layer is יער נמוך the code will
-            inspect further for covtype - 
-            as it would do in c__logiclayers (part - 'Sub-forest inspection').
-            """
-            #check if layer's vegForm is יער נמוך:
-            lowForest_options = [
-                'יער מעורב נמוך',
-                'יער מחטני נמוך',
-                'יער רחבי עלים נמוך'
-            ]
-            isLowForest = primaryLayer.vegForm in lowForest_options
-
-            if isLowForest:
-                planttype = {k:v for k,v in self.v__planttype.items()}
-                if planttype['צומח_גדות_נחלים'] >= 30:
-                    covtype = 'צומח_גדות_נחלים'
-                else:
-                    planttype['שיחים'] += planttype['עצים'] + planttype['צומח_גדות_נחלים']
-                    planttype['עצים'] = 0
-                    planttype['צומח_גדות_נחלים'] = 0
-                    #The vegforms relevant for this step:
-                    vegForms = ['שיחים', 'בני_שיח', 'עשבוני']
-                    #vegForms_covers is a list of tuples: [(vegForm <str>, cover percent <int>), ...]
-                    #A tuple would be added only if cover percent >= 10 .
-                    vegForms_covers = [(vegform, planttype[vegform]) for vegform in vegForms if planttype[vegform] >= 10]
-                    if vegForms_covers:
-                        #pick the first tuple, for it's the highest hierarchy of vegForms:
-                        tup = vegForms_covers[0]
-                        covtype = tup[0]
-                    else:
-                        #No veg form of the three mentioned above has cover >= 10:
-                        #go to 'ללא כיסוי'.
-                        covtype = 'ללא_כיסוי'
-                
-                resultObj.assignSubForest(covtype)
-                return resultObj
-
-            else:
-                covtype = primaryLayer.vegForm
-                resultObj.assignSubForest(covtype)
-                #Check if code is None: that means it was not found in speciesHierarchy.json file.
-                #and then notify:
-                if (resultObj.str is not None) and (resultObj.code is None):
-                    txt = "Could not find species code of %s in JSON file." % resultObj.str
-                    self.notifier.add(stepName, 'warning', txt)
-                #return. that means the logic ends here.
-                return resultObj
-        
-        #check nodes' own value
-        for node in iterableNodes:
-            if node.value >= 8:
-                resultObj.assignNode(node)
-                #return. that means the logic ends here.
-                return resultObj
-
-        maxLvl = max([n.getLevel() for n in iterableNodes])
-        loopAgain = True
-
-        while loopAgain:
-            #inspect
-            for node in iterableNodes:
-                #notice I use .sumDown() and not .value.
-                if node.sumDown()>=8:
-                    resultObj.assignNode(node)
-                    #Notice I don't use return resultObj because
-                    #IT'S NOT THE END OF THE LOGIC.
-                    loopAgain = False
-                        
-            #go up a level only if a new loop will start later:
-            # 1)Node hasn't been chosen.
-            # 2)going up a level is allowed (when current maxLvl>1).
-            goingUpAllowed = maxLvl>1
-            if (not resultObj.assigned) and goingUpAllowed:
-                #go up one level before looping again:
-                loopAgain = True
-                for i, node in enumerate(iterableNodes):
-                    if node.getLevel() == maxLvl:
-                        #fold up:
-                        #1) add value to parent
-                        node.parent.value += node.value
-                        #2) remove value of node
-                        node.value = 0
-                #reset list:
-                iterableNodes = root.getNodesWithValue()
-                maxLvl = max([n.getLevel() for n in iterableNodes])
-            else:
-                loopAgain = False
-
-        if resultObj.assigned:
-            #check if it is "מעורב רחבי-עלים"
-            if resultObj.mode == 'single' and resultObj.singleNode.codedValue == '2900':
-                #Collect veg forms from stand's fields:
-                # tmira / high / mid forest veg form.
-                #notice the vegforms are taken from c__forestLayer__vegForm:
-                #if it runs before it - raise an ERROR:
-                if not self.forestlayerVegform_calculated:
-                    errorText = "Code running order error: forest layers' veg form must be calculated before covtype."
-                    arcpy.AddError(errorText)
-                
-                #take vegform from all forest layers (high, t, m), not only primary and secondary!
-                #takes the UNtranslated vegform
-                vegForms = set()
-                for layerNum in [4, 3, 2]:
-                    forestVegForm_raw = self.layerVegForm[layerNum]
-                    if hasattr(forestVegForm_raw,'split'):
-                        for vegform in forestVegForm_raw.split(','):
-                            vegForms.add(vegform)
-                    else:
-                        continue
-                """
-                #old code block - takes only from priary and secondary layer:
-                for layer in logiclayersObj.values():
-                    if layer.layerNum in forestLayer_vegForms_numsFields.keys():
-                        fieldcode = forestLayer_vegForms_numsFields[layer.layerNum]
-                        forestVegForm_raw = self.getSelfValue(fieldcode)
-                        for vegform in forestVegForm_raw.split(','):
-                            vegForms.add(vegform)
-                """
-                
-                #broadleafTypes is a list of possibilities sorted by order.
-                #the code would take the first of any of these options
-                #and return it.
-                broadleafTypes = [
-                    'יער_גדות_נחלים',
-                    'בוסתנים_ומטעים',
-                    'רחבי-עלים',
-                    'חורש',
-                ]
-                for broadleafType in broadleafTypes:
-                    if broadleafType in vegForms:
-                        #specific case: change the text
-                        if broadleafType == 'רחבי-עלים':
-                            broadleafType = 'מעורב רחבי-עלים'
-                        #return: code ends here:
-                        resultObj.assignBroadleaf(broadleafType)
-                        return resultObj
-                
-                #No item in broadleafTypes was found in vegForms.
-                #vegForms list is empty or none of broadleafTypes is in it:
-                #post a warning and return an errorish result.
-                broadleafText = 'שגיאה רחבי-עלים'
-                resultObj.assignBroadleaf(broadleafText)
-                warningText = 'Could not find broadleaf type among %s' \
-                % list(vegForms)
-                self.notifier.add(stepName, 'warning', warningText)
-                return resultObj
-            else:
-                return resultObj
-        else:
-            #resultObj hasn't been assigned yet (no node is >= 8).
-            #now iterableNodes holds only species "groups" (of highest lvl).
-            #logic of complementary graph:
-            for n in iterableNodes:
-                if n.sumDown() < 2:
-                    iterableNodes.remove(n)
-
-            #The purpose of this section is to check if 'מעורב רחבי-עלים' is
-            #one of the nodes, and if so, check if can be replaced, based on 
-            #the vegform RAW values of tmira, high, mid layers.
-            
-            #Check if "מעורב רחבי-עלים" is in iterableNodes:
-            if '2900' in [n.codedValue for n in iterableNodes]:
-                #Find this node's position in iterableNodes:
-                broadleaf_index = [n.codedValue for n in iterableNodes].index('2900')
-                #Collect veg forms from stand's fields:
-                # tmira / high / mid forest veg form.
-                #notice the vegforms are taken from c__forestLayer__vegForm:
-                #if it runs before it - raise an ERROR:
-                if not self.forestlayerVegform_calculated:
-                    errorText = "Code running order error: forest layers' veg form must be calculated before covtype."
-                    arcpy.AddError(errorText)
-                vegForms = set()
-                for layerNum in [4, 3, 2]:
-                    forestVegForm_raw = self.layerVegForm[layerNum]
-                    if hasattr(forestVegForm_raw,'split'):
-                        for vegform in forestVegForm_raw.split(','):
-                            vegForms.add(vegform)
-                    else:
-                        continue
-                
-                
-                #broadleafTypes is a list of possibilities sorted by order.
-                #the code would take the first of any of these options
-                #and replace 'מעורב רחבי-עלים' node with it.
-                broadleafTypes = [
-                    'יער_גדות_נחלים',
-                    'יער גדות נחלים',
-                    'בוסתנים_ומטעים',
-                    'בוסתנים ומטעים',
-                    'רחבי-עלים', #@REQUIRES ATTENTION
-                    'חורש',
-                ]
-                foundSubstitute = False
-                for broadleafType in broadleafTypes:
-                    if broadleafType in vegForms:
-                        foundSubstitute = True
-                        #specific case: change the text
-                        if broadleafType == 'רחבי-עלים':
-                            broadleafType = 'מעורב רחבי-עלים'
-                        #find the node by its name in root:
-                        substituteNode = Node()
-                        str = broadleafType
-                        str_translated = translate(str, subForestVegForm_translation)
-                        substituteNode = findNodeByName(root, str_translated)
-                        if not substituteNode.isEmpty():
-                            #Re-construct root tree based on the species in iterable nodes.
-                            #However, this time every iterableNode has its OWN value,
-                            #and not a sumDown of its children.
-                            #A list of tuples [(codedValue, proportion)]
-                            tupList = []
-                            for i, node in enumerate(iterableNodes):
-                                isSubstitute = i==broadleaf_index
-                                if isSubstitute:
-                                    #Combine the new coded value, and the previous sumDown().
-                                    codedValue = substituteNode.codedValue
-                                    proportion = node.sumDown()
-                                    tupList.append((codedValue, proportion))
-                                else:
-                                    codedValue = node.codedValue
-                                    proportion = node.sumDown()
-                                    tupList.append((codedValue, proportion))
-                            
-                            root.resetValues()
-                            for codedValue,proportion in tupList:
-                                root.findAndSet(codedValue, proportion)
-                            
-                            #re-construct iterableNodes list:
-                            iterableNodes = root.getNodesWithValue()
-                        else:
-                            txt = 'Could not locate %s in JSON file.' % str_translated
-                            self.notifier.add(stepName, 'warning', txt)
-
-                        #Substitution finished - stop this for-loop:
-                        break
-                if not foundSubstitute:
-                    #One of iterableNodes is 'מעורב רחבי עלים', and no substitute was
-                    #found in veg forms of tmira \ high \ mid layers.
-                    #add warning:
-                    txt = "Could not find substitute for '%s' in stand's veg forms of layers tmira \\ high \\ mid." % \
-                    iterableNodes[broadleaf_index].name
-                    #suspend warning: (development section #5)
-                    #self.notifier.add(stepName, 'warning', txt)
-
-            if len(iterableNodes) == 1:
-                resultObj.assignNode(iterableNodes[0])
-                return resultObj
-            elif len(iterableNodes) == 2:
-                resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
-                return resultObj
-            elif len(iterableNodes) > 2:
-                #That means~~ len(iterableNodes) > 2
-                #sort descending by sumDown():
-                iterableNodes.sort(key=lambda x: x.sumDown(), reverse=True)
-                if iterableNodes[1].sumDown() > iterableNodes[2].sumDown():
-                    #Second species group > third:
-                    resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
-                    return resultObj
-                else:
-                    #Second == third
-                    if iterableNodes[0].sumDown() > iterableNodes[1].sumDown():
-                        #First > second (and third)
-                        if '1000' in [n.codedValue for n in iterableNodes[1:]]:
-                            #בקבוצות הקטנות (לא הראשונה) יש מחטני
-                            mahtaniNode_index = [n.codedValue for n in iterableNodes].index('1000')
-                            mahtaniNode = iterableNodes[mahtaniNode_index]
-                            resultObj.assignNodes([iterableNodes[0], mahtaniNode])
-                            return resultObj
-                        else:
-                            #בקבוצות הקטנות (לא הראשונה) אין מחטני
-                            resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
-                            return resultObj
-                    else:
-                        #First == second == third
-                        resultObj.assignNodes([iterableNodes[0], iterableNodes[1]])
-                        return resultObj
-        
-        #In case an unpredicted situation happened, return a default result obj and warn.
-        self.warnings.append("Could not determine species composition.")
-        resultObj.str = "Could not determine."
-        return resultObj
-
-    def c__forestagecomposition(self):
-        """
-        Takes all the values from fields "Tmira/high/mid layer cover",
-        ommits any value that is below "פזור",
-        returns according to the amount of values left:
-        - 0 values are "פזור" or above → "אין קומת גובה"
-        - 1...
-        - 2...
-        - 3 → "רב שכבתי"
-        Must be callued after c__forestLayer__layerCover has ran, and its values were written.
-        """
-        #indexed list of options to return:
-        optionsToReturn = [
-            "אין קומת עצים",
-            "חד שכבתי",
-            "דו שכבתי",
-            "רב שכבתי",
-        ]
-        layerCoverKeys = list(layerCover_table1.keys())
-        thrasholdIndex = 2
-
-        rawValues = self.getSelfValue([50047,50051,50055])
-
-        # VALIDATION:
-        # Keep only values that can be indexed later.
-        validValues = []
-        for rawValue in rawValues:
-            if rawValue in layerCoverKeys:
-                validValues.append(rawValue)
-        
-        # LOGIC:
-        indexedValues = [layerCoverKeys.index(v) for v in validValues]
-        N_valuesAboveThreshold = len([index_ for index_ in indexedValues if index_ >= thrasholdIndex])
-        return optionsToReturn[N_valuesAboveThreshold]
-
-    def c__standvegform(self, logiclayersDict):
-        """
-        Takes the output of c__logiclayers() method:
-        - logiclayersDict: a dict of 'primary' & 'secondary' layer reselt objects.
-        Calculates and returns veg form of the whole stand based on its
-        calculated primary and secondary layers' veg form and layer cover.
-        Returns <str>.
-        """
-        stepName = 'standvegform'
-
-        primaryLayer = logiclayersDict['primary']
-        secondaryLayer = logiclayersDict['secondary']
-
-        if not primaryLayer.isForestLayer:
-            return primaryLayer.vegForm_translated
-        elif not secondaryLayer.isForestLayer:
-            #primary layer - a forest layer
-            #-and-
-            #secondary layer - is not
-            #
-            #→return the matrix product of primary layer TIMES TWO.
-            vegforms = [primaryLayer.vegForm]*2
-            return standVegFormCoordinator.solve(vegforms)
-        else:
-            #set 3 conditions, if one or more are True → go to matrix,
-            #   if all are False → return primaryLayer.vegForm.
-            condition_1 = primaryLayer.vegForm == secondaryLayer.vegForm
-            #2: Layercover of primary and secondary are identical or 1 level apart:
-            condition_2 = abs(primaryLayer.layerCover_num - secondaryLayer.layerCover_num) <= 1
-            #3: At least one of the layers is both: (1) layercover פתוח, and (2) vegform is one of the following.
-            vegForms__temp = ["מחטני", "מעורב", "איקליפטוס", "יער_גדות_נחלים"]
-            condition_3 = (primaryLayer.layerCover_num == 3 and primaryLayer.vegForm in vegForms__temp) or \
-            (secondaryLayer.layerCover_num == 3 and secondaryLayer.vegForm in vegForms__temp)
-            
-            conditions = [condition_1, condition_2, condition_3]
-
-            if True in conditions:
-                #go to matrix:
-                vegFormsList = [layer.vegForm for layer in [primaryLayer, secondaryLayer]]
-                return standVegFormCoordinator.solve(vegFormsList)
-            else:
-                #→return the matrix product of primary layer TIMES TWO.
-                vegforms = [primaryLayer.vegForm_translated]*2
-                return standVegFormCoordinator.solve(vegforms)
-
-    def c__groundlevelfloorvegform(self):
-        """
-        Calculates stand's ground level floor veg form based on:
-            -isConiferForest <bool>
-            -isBroadleafForest <bool>
-            -v__planttype <dict>
-            -v__logiclayers {'primary': <obj>, 'secondary': <obj>}
-        All the attributes mentioned above have to be calculated before
-        this method is called.
-        The logic of this method is identical to that of c__logiclayers, 
-        in the part of #Sub-forest inspection. c__logiclayers would not
-        necessarily calculate this step, but if it did - c__groundlevelfloorvegform
-        would take the value calculated for ground level.
-        Returns <str>.
-        """
-        stepName = 'groundlevelfloorvegform'
-        #Check if c__logiclayers returned sub-forest veg form:
-        for order in ['primary', 'secondary']:
-            layerResult_obj = self.v__logiclayers[order]
-            if layerResult_obj.layerNum == 1:
-                return layerResult_obj.vegForm_translated
-        
-        #c__logiclayers doesn't have a subforest layer, let's calculate:
-        #PAY ATTENTION! this is a variation of c__logiclayers().
-
-        #Replicate self.v__planttype to a local variable that is
-        #not referenced, because its values might get changed.
-        planttype = {k:v for k,v in self.v__planttype.items()}
-        #lowForest booleans, self-describing:
-        lowForest_boolList = [self.isConiferForest, self.isBroadleafForest]
-        treesPresence = True in lowForest_boolList
-        if treesPresence:
-            if lowForest_boolList == [True, True]:
-                vegForm = 'יער מעורב נמוך'
-                return vegForm
-            elif lowForest_boolList == [True, False]:
-                vegForm = 'יער מחטני נמוך'
-                return vegForm
-            elif lowForest_boolList == [False, True]:
-                vegForm = 'יער רחבי עלים נמוך'
-                return vegForm
-        elif planttype['צומח_גדות_נחלים'] >= 30:
-            percent = planttype['צומח_גדות_נחלים']
-            vegForm = 'צומח_גדות_נחלים'
-            #translate:
-            vegForm = translate(vegForm, subForestVegForm_translation)
-            return vegForm
-        else:
-            planttype['שיחים'] += planttype['עצים'] + planttype['צומח_גדות_נחלים']
-            planttype['עצים'] = 0
-            planttype['צומח_גדות_נחלים'] = 0
-            #The vegforms relevant for this step:
-            vegForms = ['שיחים', 'בני_שיח', 'עשבוני']
-            #vegForms_covers is a list of tuples: [(vegForm <str>, cover percent <int>), ...]
-            #A tuple would be added only if cover percent >= 10 .
-            vegForms_covers = [(vegform, planttype[vegform]) for vegform in vegForms if planttype[vegform] >= 10]
-            if vegForms_covers:
-                #pick the first tuple, for it's the highest hierarchy of vegForms:
-                tup = vegForms_covers[0]
-                vegForm = tup[0]
-                #translate:
-                vegForm = translate(vegForm, subForestVegForm_translation)
-                return vegForm
-            else:
-                #No veg form of the three mentioned above has cover >= 10:
-                #go to 'ללא כיסוי'.
-                vegForm = 'ללא_כיסוי'
-                #translate:
-                vegForm = translate(vegForm, subForestVegForm_translation)
-                #Add warning:
-                txt = 'sub-forest layer "%s".' % vegForm
-                self.notifier.add(stepName, 'warning', txt)
-                return vegForm
-
-    def c__pointvarianceindex(self):
-        """
-        Takes values of an array of fields from all the sekerpoints
-        in the source polygons. Each field gets a calculated variance,
-        in the end the average of variances is being averaged and
-        converted to a category.
-        Returns  variance category <str>.
-        """
-        stepName = 'pointvarianceindex'
-
-        def matrixToList(matrix, valueIndex):
-            """
-            Returns a list of all the values that appear in the field
-            of the desired index.
-            """
-            outputList = []
-            for areaProportion, rows in matrix:
-                for row in rows:
-                    outputList.append(row[valueIndex])
-            return outputList
-
-
-        # Categories and their maximum value:
-        varianceCategories = [
-            (30, "עומד הטרוגני מאוד"),
-            (60, "עומד הטרוגני"),
-            (100, "עומד אחיד")
-        ]
-
-        # Import all the data at once:
-        # The order of the fields MUST NOT be changed 
-        # without changing the indecies in the logic.
-        totalFieldCodes = [40013, 40020, 40024, 40025, 40034, 40035, 40044, 40045 ,40114, 40119]#@, 40115]
-        matrix = self.getMatrix_related('sp', totalFieldCodes)
-
-        # varianceList - a list of field variance values,
-        # to be averaged later.
-        varianceList = []
-
-        # VALIDATION:
-        # Number of points must be > 1
-        n_points = len(matrixToList(matrix,0))
-        if n_points <= 1:
-            # two origin polygon must include at least two seker points,
-            # one for each polygon.
-            txt = 'number of sekerpoints in both polygons is <= 1.'
-            self.notifier.add(stepName, 'warning', txt)
-            return None
-
-        # LOGIC:
-        # Go through every field or group of fields and calculate the fielde variance:
-        indicies_freeValues = [0, 2, 4, 6, 9]#@, 10]
-        for fieldCodeIndex in indicies_freeValues:
-            values = matrixToList(matrix, fieldCodeIndex)
-
-            # replace '' with None:
-            while '' in values:
-                values[values.index('')] = None
-            
-            # find the most frequent value:
-            frequentValue = freqSorted(values)[0]
-            variance = values.count(frequentValue) / n_points
-            varianceList.append(variance)
-        
-        indicies_coverValues = [3, 5, 7]
-        for fieldCodeIndex in indicies_coverValues:
-            values = matrixToList(matrix, fieldCodeIndex)
-
-            # replace the next values with None
-            valuesToGroup = [
-                '',
-                'אין',
-                'זניח (3%-0%)',
-                'פזור (10%-3%)'
-            ]
-            # replace with None:
-            for valueToGroup in valuesToGroup:
-                while valueToGroup in values:
-                    values[values.index(valueToGroup)] = None
-            
-            # find the most frequent value:
-            frequentValue = freqSorted(values)[0]
-            variance = values.count(frequentValue) / n_points
-            varianceList.append(variance)
-
-        # general density field index:
-        index_generaldensity = 1
-        values = matrixToList(matrix, index_generaldensity)
-        # replace the next values with None
-        valuesToGroup = [
-            '',
-            'אין עצים',
-            'לא רלוונטי',
-        ]
-        # replace with None:
-        for valueToGroup in valuesToGroup:
-            while valueToGroup in values:
-                values[values.index(valueToGroup)] = None
-        # find the most frequent value:
-        frequentValue = freqSorted(values)[0]
-        variance = values.count(frequentValue) / n_points
-        varianceList.append(variance)
-
-        # treeharm field index:
-        index_treeharm = 8
-        values = matrixToList(matrix, index_treeharm)
-        # replace the next values with None
-        valuesToGroup = [
-            '',
-            'אין',
-            'זניח (3%-0%)',
-            'מועט (10%-3%)'
-        ]
-        # replace with None:
-        for valueToGroup in valuesToGroup:
-            while valueToGroup in values:
-                values[values.index(valueToGroup)] = None
-        # find the most frequent value:
-        frequentValue = freqSorted(values)[0]
-        variance = values.count(frequentValue) / n_points
-        varianceList.append(variance)
-
-        # done collecting fields' variance values.
-        varianceAverage = average(varianceList)
-        # multiply the variance average by 100 to convert to percentage.
-        category = toCategory(varianceAverage * 100, varianceCategories)
-
-        return category
-
 #PROCESS
 arcpy.env.overwriteOutput = True
 org = Organizer(
@@ -5668,15 +1535,15 @@ message = 'Creating a buck-up database...'
 arcpy.AddMessage(message)
 arcpy.SetProgressor("default",message)and
 """
-org.initBuckupDatabase()
+org.initbackupDatabase()
 
 # Create a new Organizer object for the buck-up database:
-org_buckup = org.replicate()
+org_backup = org.replicate()
 
 #### Process section 2: ####
 # Check for .lock files in the databases:
 lock_pattern = re.compile(r".*\.lock$")
-for organizerInspected in [org, org_buckup]:
+for organizerInspected in [org, org_backup]:
     inspectedDatasets = set()
     for relationship in organizerInspected.relationships.values():
         inspectedDatasets.add(relationship.destination.fullPath)
@@ -5697,32 +1564,318 @@ for organizerInspected in [org, org_buckup]:
             arcpy.AddError(f"An unexpected error occurred during lock check: {e}")
             raise # Re-raise to stop the script tool execution
 
-    
-
 #### Process section 3: ####
 # Go through each unite line:
 
-#Notify in UI about process start:
-message = 'Handling changes...'
-featureCount = getFeatureCount(org.unitelines.name)
+# Check for existing locks:
+# Collect all datasets that are inspected for locks:
+# This includes both the original and the buck-up databases.
+inspectedDatasets = set()
+for organizerInspected in [org, org_backup]:
+    for relationship in organizerInspected.relationships.values():
+        inspectedDatasets.add(relationship.destination.fullPath)
+        inspectedDatasets.add(relationship.origin.fullPath)
+inspectedDatasets = list(inspectedDatasets)
+inspectedDatasets_locks = [i for i in inspectedDatasets if not arcpy.TestSchemaLock(i)]
+try:
+    if inspectedDatasets_locks:
+        inspectedDatasets_locks_desc = [arcpy.Describe(i) for i in inspectedDatasets_locks]
+        messages = [f'gdb: {d.workspace.name} - dataset: {d.name}.' for d in inspectedDatasets_locks_desc]
+        error_message = f"The following datasets have a schema lock:\n" + "\n\t".join(messages)
+        raise arcpy.ExecuteError(error_message)
+    else:
+        arcpy.AddMessage(f"Did not find schema locks.")
+        # Get a list of Unite Lines object IDs:
+        uniteLines_OIDs = []
+        with arcpy.da.SearchCursor(
+            org.unitelines.fullPath,
+            [org.unitelines.oidFieldName],
+            where_clause='OBJECTID IS NOT NULL'
+        ) as oid_cursor:
+            for row in oid_cursor:
+                uniteLines_OIDs.append(row[0])
+except arcpy.ExecuteError:
+    arcpy.AddError("Script aborted due to geodatabase access issues.")
+    # No need to stopEditing here; the 'with' statement for editor handles it.
+    raise # Re-raise to signal failure to the geoprocessing framework
+
+# Notify in UI about process start:
+message = 'Processing Unite Lines...'
+featureCount = len(uniteLines_OIDs)
 arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
-counter = 1
 
+# --- Start editing the geodatabase: ---
+# Create an editor object for both databases:
+editor_orig = None
+editor_backup = None
 
-uniteLines_uc = arcpy.UpdateCursor(
-    org.unitelines.fullPath,
-    #where_clause = 'OBJECTID = 1', #for debug!!!
-    sort_fields = "%s A" % org.unitelines.oidFieldName
-    )
-#Main iteration:
-for uniteLines_r in uniteLines_uc:
-    tempMessage = 'Handling changes... (row: %s of %s feafures)' % (counter, featureCount)
-    arcpy.SetProgressorLabel(tempMessage)
+try:
+    editor_orig = arcpy.da.Editor(org.unitelines.workspace)
+    editor_backup = arcpy.da.Editor(org_backup.unitelines.workspace)
+    editor_orig.startEditing()
+    editor_backup.startEditing()
 
-    lineObj = UniteLine(uniteLines_r, org.unitelines)
-    uniteLines_uc.updateRow(lineObj.row)
+    for lineOID in uniteLines_OIDs:
+        arcpy.SetProgressorPosition()
+        counter = uniteLines_OIDs.index(lineOID)+1
+        arcpy.AddMessage(f"Processing Unite Line: {counter} of {featureCount}")
+        # Create an SearchCursor for the Unite Lines feature class,
+        # gather the necessary fields, and terminate the cursor.
+        unitelines_fieldCodes = [60002, 60003, 60006, 60007, 60008]
+        unitelines_fieldNames = [fieldsDict[code].name for code in unitelines_fieldCodes]
+        unitelines_sqlQuery = buildSqlQuery(org.unitelines.fullPath, org.unitelines.oidFieldName, lineOID, wQuote = False)
+        with arcpy.da.SearchCursor(
+            org.unitelines.fullPath,
+            unitelines_fieldNames,
+            where_clause=unitelines_sqlQuery
+        ) as unitelines_sc:
+            for unitelines_row in unitelines_sc:
+                # a dict that coordinates between field codes and their values:
+                uniteline_fieldValues = {code: unitelines_row[i] for i, code in enumerate(unitelines_fieldCodes)}
+        # valid joint condition:
+        # stats is 'תקין' and product stand_id is not None.
+        joint_isValid = uniteline_fieldValues[60003] == 'תקין' and uniteline_fieldValues[60002] and uniteline_fieldValues[60007] is not None and uniteline_fieldValues[60008] is not None
+        if not joint_isValid:
+            # If the joint is not valid, skip this row.
+            arcpy.AddMessage(f"Skipping Unite Line OID: {lineOID} - Joint is not valid. Check unite line's status or its related stand ID attributes.")
+            continue
+        # Joint is valid.
+        # Act according to descision value:
+        descision = uniteline_fieldValues[60006]
+        if descision == '1':
+            editor_orig.startOperation()
+            editor_backup.startOperation()
+            # copy stand to the backup database
+            # and update the line's origin stands guid to the new guid
+            # from the backup database.
+            orig_relationship_ls = org.unitelines.relationships['ls']
+            orig_FC = orig_relationship_ls.destination
+            fieldNames = [field.name for field in orig_FC.desc.fields]
+            backup_relationship_ls = org_backup.relationships['ls']
+            backup_FC = backup_relationship_ls.destination
+            # replace shape field with "SHAPE@"
+            for i, fieldName in enumerate(fieldNames):
+                if fieldName.lower() == 'shape':
+                    fieldNames[i] = 'SHAPE@'
+            standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
+            standIDs_new = ['', '']
+            standID_product = uniteline_fieldValues[60002]
+            # CHECK that both stands exist in the original database:
+            bothStands_sqlQuery = f"{orig_relationship_ls.foreignKey_fieldName} IN ('{standIDs_old[0]}', '{standIDs_old[1]}')"
+            stands_count = 0
+            with arcpy.da.SearchCursor(orig_FC.fullPath, 'OID@', where_clause = bothStands_sqlQuery) as sc:
+                for r in sc:
+                    stands_count += 1
+            if not stands_count == 2:
+                # missing one or more stands, 
+                # unable to complete backup - continue to next unite line.
+                warningMessage = f'original gdb is missing at least one stand of the following: {standIDs_old}.'
+                arcpy.AddWarning(warningMessage)
+                continue
+            for i, standID in enumerate(standIDs_old):
+                origStand_sqlQuery = buildSqlQuery(orig_FC.fullPath,
+                                                    orig_relationship_ls.foreignKey_fieldName,
+                                                    standID)
+                
+                # COPY-PASTE stands - start two cursors:
+                # NOTICE - the original stand is not deleted yet, 
+                # since deleting it prevents locating its related rows by standID.
+                with arcpy.da.SearchCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_sc:
+                    with arcpy.da.InsertCursor(backup_FC.fullPath, fieldNames) as backup_ic:
+                        for orig_r in orig_sc:
+                            # insert row to the backup gdb and collect its OBJECTID
+                            backupObjectid = backup_ic.insertRow(orig_r)
+                # get the new guid of the backup stand
+                backup_sqlQuery = f'{backup_relationship_ls.destination.oidFieldName} = {backupObjectid}'
+                with arcpy.da.SearchCursor(backup_FC.fullPath, backup_relationship_ls.foreignKey_fieldName, where_clause = backup_sqlQuery) as backup_sc:
+                    for backup_r in backup_sc:
+                        standIDs_new[i] = backup_r[0]
+                         
+                # CUT-PASTE stand's rows of related tables:
+                for nickname in stands_tables_relationships.keys():
+                    # stX - st1, st2, st3, st4
+                    orig_relationship_stX = org.relationships[nickname]
+                    orig_tableX = orig_relationship_stX.destination
+                    backup_relationship_stX = org_backup.relationships[nickname]
+                    backup_tableX = backup_relationship_stX.destination
+                    
+                    # locate foreignKey_fieldName ('stand_id') field index:
+                    fieldNames_table = [field.name for field in orig_tableX.desc.fields]
+                    foreignKey_index = [i for i, field in enumerate(fieldNames_table) if field.lower() == orig_relationship_stX.foreignKey_fieldName.lower()][0]
+                    sqlQuery = buildSqlQuery(orig_tableX.fullPath,
+                                                orig_relationship_stX.foreignKey_fieldName,
+                                                standID)
+                    with arcpy.da.UpdateCursor(orig_tableX.fullPath, fieldNames_table, sqlQuery) as orig_uc:
+                        with arcpy.da.InsertCursor(backup_tableX.fullPath, fieldNames_table) as backup_ic:
+                            for orig_r in orig_uc:
+                                # replace the foreignKey field value with the new guid
+                                orig_r = list(orig_r)
+                                orig_r[foreignKey_index] = standIDs_new[i]
+                                # insert row to the backup gdb
+                                backup_ic.insertRow(tuple(orig_r))
+                                # delete the original table row
+                                orig_uc.deleteRow()
 
-    arcpy.SetProgressorPosition()
-    counter += 1
-del uniteLines_uc
+                # ASSIGN sekerpoints to the new product stand:
+                orig_relationship_sp = org.relationships['sp']
+                orig_sekerpointsFC = orig_relationship_sp.destination
+                sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, standID)
+                with arcpy.da.UpdateCursor(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, sekerpoints_sqlQuery) as orig_sekerpoints_uc:
+                    for orig_sekerpoints_r in orig_sekerpoints_uc:
+                        # replace the foreignKey field value with the new guid
+                        orig_sekerpoints_r[0] = standID_product
+                        orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
+
+                # DELETE stand from the original database:
+                with arcpy.da.UpdateCursor(orig_FC.fullPath, fieldNames, where_clause = origStand_sqlQuery) as orig_uc:
+                    for orig_r in orig_uc:
+                        orig_uc.deleteRow()
+                
+            # UPDATE unite line with backup stand IDs:
+            unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
+            with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
+                for unitelines_r in unitelines_uc:
+                    # update the row with the new backup stand IDs
+                    unitelines_r[0] = standIDs_new[0]
+                    unitelines_r[1] = standIDs_new[1]
+                    # update the line's status to None (null)
+                    unitelines_r[2] = None
+                    unitelines_uc.updateRow(unitelines_r)
+            # stop operation:
+            editor_orig.stopOperation()
+            editor_backup.stopOperation()
+        elif descision == '2':
+            editor_orig.startOperation()
+            editor_backup.startOperation()
+            # copy stands from the backup database to original database
+            # and update the line's origin stands guid to the new guid
+            # from the original database.
+            backup_relationship_ls = org_backup.unitelines.relationships['ls']
+            backup_FC = backup_relationship_ls.destination
+            fieldNames = [field.name for field in backup_FC.desc.fields]
+            orig_relationship_ls = org.relationships['ls']
+            orig_FC = orig_relationship_ls.destination
+            # replace shape field with "SHAPE@"
+            for i, fieldName in enumerate(fieldNames):
+                if fieldName.lower() == 'shape':
+                    fieldNames[i] = 'SHAPE@'
+            standIDs_old = [uniteline_fieldValues[60007], uniteline_fieldValues[60008]]
+            standIDs_new = ['', '']
+            standShapes_new = [None, None]
+            standID_product = uniteline_fieldValues[60002]
+            # CHECK that both stands exist in the backup database:
+            bothStands_sqlQuery = f"{backup_relationship_ls.foreignKey_fieldName} IN ('{standIDs_old[0]}', '{standIDs_old[1]}')"
+            stands_count = 0
+            with arcpy.da.SearchCursor(backup_FC.fullPath, 'OID@', where_clause = bothStands_sqlQuery) as sc:
+                for r in sc:
+                    stands_count += 1
+            if not stands_count == 2:
+                # missing one or more stands, 
+                # unable to complete backup - continue to next unite line.
+                warningMessage = f'backup gdb is missing at least one stand of the following: {standIDs_old}.'
+                arcpy.AddWarning(warningMessage)
+                continue
+            for i, standID in enumerate(standIDs_old):
+                backupStand_sqlQuery = buildSqlQuery(backup_FC.fullPath,
+                                                    backup_relationship_ls.foreignKey_fieldName,
+                                                    standID)
+                
+                # COPY-PASTE stands - start two cursors:
+                # NOTICE - the original stand is not deleted yet, 
+                # since deleting it prevents locating its related rows by standID.
+                with arcpy.da.SearchCursor(backup_FC.fullPath, fieldNames, where_clause = backupStand_sqlQuery) as backup_sc:
+                    with arcpy.da.InsertCursor(orig_FC.fullPath, fieldNames) as orig_ic:
+                        for backup_r in backup_sc:
+                            # insert row to the orig gdb and collect its OBJECTID
+                            origObjectid = orig_ic.insertRow(backup_r)
+                # get the new guid of the orig stand
+                orig_sqlQuery = f'{orig_relationship_ls.destination.oidFieldName} = {origObjectid}'
+                with arcpy.da.SearchCursor(orig_FC.fullPath, [orig_relationship_ls.foreignKey_fieldName, 'SHAPE@'], where_clause = orig_sqlQuery) as orig_sc:
+                    for orig_r in orig_sc:
+                        standIDs_new[i] = orig_r[0]
+                        standShapes_new[i] = orig_r[1]
+                
+                # CUT-PASTE stand's rows of related tables:
+                for nickname in stands_tables_relationships.keys():
+                    # stX - st1, st2, st3, st4
+                    backup_relationship_stX = org_backup.relationships[nickname]
+                    backup_tableX = backup_relationship_stX.destination
+                    orig_relationship_stX = org.relationships[nickname]
+                    orig_tableX = orig_relationship_stX.destination
+                    
+                    # locate foreignKey_fieldName ('stand_id') field index:
+                    fieldNames_table = [field.name for field in backup_tableX.desc.fields]
+                    foreignKey_index = [i for i, field in enumerate(fieldNames_table) if field.lower() == backup_relationship_stX.foreignKey_fieldName.lower()][0]
+                    sqlQuery = buildSqlQuery(backup_tableX.fullPath,
+                                                backup_relationship_stX.foreignKey_fieldName,
+                                                standID)
+                    with arcpy.da.UpdateCursor(backup_tableX.fullPath, fieldNames_table, sqlQuery) as backup_uc:
+                        with arcpy.da.InsertCursor(orig_tableX.fullPath, fieldNames_table) as orig_ic:
+                            for backup_r in backup_uc:
+                                # replace the foreignKey field value with the new guid
+                                backup_r = list(backup_r)
+                                backup_r[foreignKey_index] = standIDs_new[i]
+                                # insert row to the orig gdb
+                                orig_ic.insertRow(tuple(backup_r))
+                                # delete the original table row
+                                backup_uc.deleteRow()
+
+                # ASSIGN sekerpoints to the source stands:
+                orig_relationship_sp = org.relationships['sp']
+                orig_sekerpointsFC = orig_relationship_sp.destination
+                sekerpoints_sqlQuery = buildSqlQuery(orig_sekerpointsFC.fullPath, orig_relationship_sp.foreignKey_fieldName, standID_product)
+                with arcpy.da.UpdateCursor(orig_sekerpointsFC.fullPath, [orig_relationship_sp.foreignKey_fieldName, "SHAPE@"], sekerpoints_sqlQuery) as orig_sekerpoints_uc:
+                    for orig_sekerpoints_r in orig_sekerpoints_uc:
+                        # check if the sekerpoint is within the new stand shape:
+                        sekerpoint_shape = orig_sekerpoints_r[1]
+                        if sekerpoint_shape.within(standShapes_new[i]):
+                            # replace the foreignKey field value with the new guid
+                            orig_sekerpoints_r[0] = standIDs_new[i]
+                            orig_sekerpoints_uc.updateRow(orig_sekerpoints_r)
+                        else:
+                            # the sekerpoint is not within the new stand shape - skip it.
+                            continue
+
+                # DELETE stand from the backup database:
+                with arcpy.da.UpdateCursor(backup_FC.fullPath, fieldNames, where_clause = backupStand_sqlQuery) as backup_uc:
+                    for backup_r in backup_uc:
+                        backup_uc.deleteRow()
+                
+            # UPDATE unite line with orig stand IDs:
+            unitelines_fieldNames = [fieldsDict[60007].name, fieldsDict[60008].name, fieldsDict[60006].name]
+            with arcpy.da.UpdateCursor(org.unitelines.fullPath, unitelines_fieldNames, unitelines_sqlQuery) as unitelines_uc:
+                for unitelines_r in unitelines_uc:
+                    # update the row with the new backup stand IDs
+                    unitelines_r[0] = standIDs_new[0]
+                    unitelines_r[1] = standIDs_new[1]
+                    # update the line's status to None (null)
+                    unitelines_r[2] = None
+                    unitelines_uc.updateRow(unitelines_r)
+            # stop operation:
+            editor_orig.stopOperation()
+            editor_backup.stopOperation()
+    # stop operation:
+    editor_orig.stopEditing(True)
+    editor_backup.stopEditing(True)            
+
+except arcpy.ExecuteError:
+    arcpy.AddError("Script aborted due to an ArcPy execution error.")
+    if editor_orig and editor_orig.isEditing:
+        editor_orig.stopEditing(False) # Discard changes
+    if editor_backup and editor_backup.isEditing:
+        editor_backup.stopEditing(False) # Discard changes
+    raise
+except Exception as e:
+    arcpy.AddError(f"An unexpected Python error occurred: {e}")
+    if editor_orig and editor_orig.isEditing:
+        editor_orig.stopEditing(False) # Discard changes
+    if editor_backup and editor_backup.isEditing:
+        editor_backup.stopEditing(False) # Discard changes
+
+    raise
+
+#arcpy.ClearWorkspaceCache_management(org.unitelines.workspace)
+#arcpy.ClearWorkspaceCache_management(org_backup.unitelines.workspace)
+
+arcpy.AddMessage("Script finished.")
