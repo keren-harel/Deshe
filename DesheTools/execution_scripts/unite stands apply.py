@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 
 #TOOL PARAMETERS
-debug_mode = True
+debug_mode = False
 if debug_mode:
     #debug parameters
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
