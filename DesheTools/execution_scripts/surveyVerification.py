@@ -394,14 +394,12 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "DominTree", "Proportion"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        DominTree = cursor[1]
-        if cursor[2] is not None:
-            Proportion = int(cursor[2])
+        globalid = rec[0]
+        DominTree = rec[1]
+        if rec[2] is not None:
+            Proportion = int(rec[2])
         else:
-            Proportion = None  
-        
-        # Append the row data to the list
+            Proportion = None
         data.append([globalid, DominTree, Proportion])
 
 # Create a DataFrame from the list
@@ -445,12 +443,12 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "PercentByTen", "PlantType"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        if cursor[1] is not None:
-            PercentByTen = int(cursor[1])
+        globalid = rec[0]
+        if rec[1] is not None:
+            PercentByTen = int(rec[1])
         else:
             PercentByTen = None  
-        PlantType = cursor[2]
+        PlantType = rec[2]
         # Append the row data to the list        
         data.append([globalid, PercentByTen, PlantType])
 
@@ -473,8 +471,8 @@ duplicates_PlantType  = check_duplicates(df_PlantTypeCoverDistribut, "globalid",
 if df_PlantTypeCoverDistribut.empty: 
     arcpy.AddWarning("PlantTypeCoverDistribut Table is empty!")
 else:
-    if not empty_StartRepeatDominTree.empty:
-        error_to_dict(empty_StartRepeatDominTree, "PlantTypeCoverDistribut", "{EMPTY_TABLE}")
+    if not empty_PlantTypeCoverDistribut.empty:
+        error_to_dict(empty_PlantTypeCoverDistribut, "PlantTypeCoverDistribut", "{EMPTY_TABLE}")
     if not duplicates_PlantType.empty:
         error_to_dict(duplicates_PlantType, "PlantTypeCoverDistribut", "{double_PlantType}")
     if not missing_PercentByTen.empty:
@@ -496,9 +494,9 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "InvasiveSpecie", "EpicenterType"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        InvasiveSpecie = cursor[1]
-        EpicenterType = cursor[2]
+        globalid = rec[0]
+        InvasiveSpecie = rec[1]
+        EpicenterType = rec[2]
         # Append the row data to the list
         data.append([globalid, InvasiveSpecie, EpicenterType])
 
@@ -540,9 +538,9 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "ForestDefect", "PercentImpact"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        ForestDefect = cursor[1]
-        PercentImpact = cursor[2]
+        globalid = rec[0]
+        ForestDefect = rec[1]
+        PercentImpact = rec[2]
         # Append the row data to the list
         data.append([globalid, ForestDefect, PercentImpact])
 
@@ -565,7 +563,7 @@ duplicates_ForestDefect  = check_duplicates(df_VitalForest, "globalid", "ForestD
 
 
 if df_VitalForest.empty:
-    arcpy.AddWarning("Invasive Species Table is Empty!")
+    arcpy.AddWarning("Vital Forest Table is Empty!")
 else:
     if not duplicates_ForestDefect.empty:
         error_to_dict(duplicates_ForestDefect, "VitalForest", "{double_ForestDefect}")
