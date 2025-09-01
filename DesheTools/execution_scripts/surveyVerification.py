@@ -1,4 +1,4 @@
-# last edit: 27-08-2025 18:00
+# last edit: 01-09-2025 18:00
 
 import arcpy
 import pandas as pd
@@ -281,7 +281,7 @@ else:
 #!---------------------------------
 
 # Input feature class
-input_smy_points = r"D:\Yoav\OneDrive - Tel-Aviv University\Development\פיתוח_יואב\וריפיקציה\smy2kkl2\smy2kkl2 - Copy\SMYDATA\segev_1320_verification.gdb\smy_survey_Segev"
+input_smy_points = input_points_layer
 
 # List to store row data
 data = []
