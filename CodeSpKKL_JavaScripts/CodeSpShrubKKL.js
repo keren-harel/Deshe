@@ -21,7 +21,7 @@ function CodeSpShrubKKL(code)
            case "4001": 
                   Sp="אטד אירופאי";
                   break;
-           case "50001": 
+           case "4601": 
                   Sp="אטד החוף";
                   break;
            case "4121": 
@@ -30,13 +30,13 @@ function CodeSpShrubKKL(code)
            case "8027": 
                   Sp="אספרג החורש";
                   break;
-	    case "50002": 
+	    case "4602": 
                   Sp="אשבל מפוסק";
                   break;
            case "4123": 
                   Sp="אשחר ארץ-ישראלי";
                   break;
-           case "50003": 
+           case "4603": 
                   Sp="אשחר מנוקד";
                   break;
            case "3971": 
@@ -48,16 +48,16 @@ function CodeSpShrubKKL(code)
            case "3972": 
                   Sp="בתה ערבתית-חולית";
                   break;
-	    case "50020": 
+	    case "4619": 
                   Sp="גומא";
                   break;
            case "4012": 
                   Sp="גלונית";
                   break;
-           case "50004": 
+           case "4604": 
                   Sp="גלונית הסלעים";
                   break;
-	    case "50005": 
+	    case "4605": 
                   Sp="גלונית מצויה";
                   break;
            case "4013": 
@@ -90,22 +90,22 @@ function CodeSpShrubKKL(code)
            case "4221": 
                   Sp="ורד הכלב";
                   break;
-           case "50006": 
+           case "4606": 
                   Sp="ויתניה משכרת";
                   break;
            case "8023": 
                   Sp="זלזלת";
                   break;
-           case "50042": 
+           case "7256": 
                   Sp="זוגן השיח"
                   break;
-           case "50007": 
+           case "4607": 
                   Sp="זוטה מעורקת";
                   break;
-	    case "50008": 
+	    case "4608": 
                   Sp="זוטה צפופה";
                   break;
-	    case "50025": 
+	    case "4621": 
                   Sp="חורשף קטן קרקפות";
                   break;
            case "7290": 
@@ -114,7 +114,7 @@ function CodeSpShrubKKL(code)
 	    case "8000": 
                   Sp="חישת קנים";
                   break;
-           case "50039": 
+           case "4639": 
                   Sp="חמד המדבר";
                   break;
            case "4002": 
@@ -123,19 +123,22 @@ function CodeSpShrubKKL(code)
            case "4009": 
                   Sp="טמוס";
                   break;
-           case "7313": 
+           case "4609":
+                  Sp="ינבוט השדה";
+                  break;
+           case "7313":
                   Sp="יסמין ריחני";
                   break;
            case "8136": 
                   Sp="יערה איטלקית";
                   break;
-           case "50040": 
+           case "4640": 
                   Sp="יפרוק";
                   break;
            case "4010": 
                   Sp="כתלה";
                   break;
-           case "4160": 
+           case "4160":
                   Sp="לוטם מרווני";
                   break;
            case "4161": 
@@ -144,13 +147,13 @@ function CodeSpShrubKKL(code)
            case "7373": 
                   Sp="לנטנה ססגונית";
                   break;
-           case "50010": 
+           case "4610": 
                   Sp="לוטמית ערבית";
                   break;
-           case "50011": 
+           case "4611": 
                   Sp="לוענית מצויה";
                   break;
-	    case "50035": 
+	    case "4635": 
                   Sp="לענת המדבר";
                   break;
            case "9218": 
@@ -174,25 +177,25 @@ function CodeSpShrubKKL(code)
            case "4003": 
                   Sp="מתנן שעיר";
                   break;
-	    case "50026": 
+	    case "4622": 
                   Sp="נואית קוצנית";
                   break;
-           case "50012": 
+           case "4612": 
                   Sp="נפית כפופה";
                   break;
-	    case "50021": 
+	    case "4620": 
                   Sp="סוף";
                   break;
            case "9018": 
                   Sp="סירה קוצנית";
                   break;
-           case "50019":
+           case "4618":
                   Sp="סמר";
                   break;
-           case "50013":
+           case "4613":
                   Sp="עכנאי שרוע";
                   break;
-           case "50014": 
+           case "4614": 
                   Sp="עפרית אירופאית";
                   break;
            case "4006": 
@@ -237,7 +240,7 @@ function CodeSpShrubKKL(code)
            case "4535": 
                   Sp="קורנית מקורקפת";
                   break;
-	    case "50029": 
+	    case "4629": 
                   Sp="קזוח עקום";
                   break;
            case "4163": 
@@ -258,7 +261,7 @@ function CodeSpShrubKKL(code)
            case "4005": 
                   Sp="שבטן לבן";
                   break;
-           case "50015": 
+           case "4615": 
                   Sp="שברק מצוי";
                   break;
            case "4211": 
@@ -270,13 +273,13 @@ function CodeSpShrubKKL(code)
            case "4008": 
                   Sp="שלהבית";
                   break;
-           case "50016": 
+           case "4616": 
                   Sp="שמשון אזוביוני";
                   break;
            case "8028": 
                   Sp="שרביטן מצוי";
                   break;
-           case "50017": 
+           case "4617": 
                   Sp="תגית קיצית";
                   break;              
             default:

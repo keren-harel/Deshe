@@ -22,7 +22,7 @@ function CodeSpTreeKKL(code)
 	    case "4101": 
                   Sp="אוג הבורסקאים";
                   break;
-           case "50036": 
+           case "4636": 
                   Sp="אוג קוצני";
                   break;
            case "2306": 
@@ -76,7 +76,7 @@ function CodeSpTreeKKL(code)
            case "2108": 
                   Sp="אקליפטוס גומפוצפלה";
                   break;
-           case "50038": 
+           case "2111": 
                   Sp="אקליפטוס דונדס";
                   break;
            case "2113": 
@@ -85,7 +85,7 @@ function CodeSpTreeKKL(code)
            case "2117": 
                   Sp="אקליפטוס טורקוואטה";
                   break;
-	    case "50024": 
+	    case "2020": 
                   Sp="אקליפטוס יוטיליס (שימושי)";
                   break;
 	    case "2116": 
@@ -94,7 +94,7 @@ function CodeSpTreeKKL(code)
            case "2118": 
                   Sp="אקליפטוס לאוקוקסילון";
                   break;
-	    case "50032": 
+	    case "2169": 
                   Sp="אקליפטוס לסאופי";
                   break;
            case "2126": 
@@ -103,22 +103,22 @@ function CodeSpTreeKKL(code)
            case "2129": 
                   Sp="אקליפטוס ספטולטה";
                   break; 
-	    case "50030": 
+	    case "2127": 
                   Sp="אקליפטוס סלובריס (אקליפטוס חיוני)";
                   break;
            case "2130": 
                   Sp="אקליפטוס סרג'נטי";
                   break;
-	    case "50023": 
+	    case "2131": 
                   Sp="אקליפטוס פופולנאה (צפצפתי)";
                   break;
-	    case "50022": 
+	    case "2021": 
                   Sp="אקליפטוס פלטיפוס (פחוס עוקץ)";
                   break;
-	    case "50027": 
+	    case "2174": 
                   Sp="אקליפטוס קמפספה (א. מכסיף)";
                   break;
-	    case "50031": 
+	    case "2139": 
                   Sp="אקליפטוס קלילנד";
                   break;
            case "2100": 
@@ -184,7 +184,7 @@ function CodeSpTreeKKL(code)
            case "3121": 
                   Sp="כליל החורש";
                   break;
-	    case "50033": 
+	    case "7276": 
                   Sp="כילופסיס סרגלי";
                   break;
            case "3131": 
@@ -205,13 +205,13 @@ function CodeSpTreeKKL(code)
            case "3171": 
                   Sp="מיש דרומי";
                   break;
-           case "50034": 
+           case "6519": 
                   Sp="נזם קוף מתוק";
                   break;
-	    case "50028": 
+	    case "3182": 
                   Sp="עוזרר אדום";
                   break;
-           case "3182": 
+           case "3181": 
                   Sp="עוזרר קוצני (מצוי)";
                   break;
            case "3191": 
@@ -277,7 +277,7 @@ function CodeSpTreeKKL(code)
            case "3261": 
                   Sp="שיזף מצוי";
                   break;
-           case "50037": 
+           case "3262": 
                   Sp="שיזף שעיר";
                   break;
            case "2201": 
