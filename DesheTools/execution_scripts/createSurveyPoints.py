@@ -5,7 +5,7 @@ from pathlib import Path
 #VARIABLES:
 DESHE_TOOLS_FOLDER_PATH = str(Path(__file__).parents[1].absolute())
 EXCEL_NAME = "classifyTypeCover_Key.xlsx"
-SHEET_NAME = "Sheet1"
+SHEET_NAME = "cover_type_keys"
 CONF_FOLDER_NAME = "configuration"
 JOIN_FIELD = "COV_TYPE"
 COL_NAME = "result"
@@ -218,6 +218,26 @@ class Cube:
 
 def copy_excel_field_to_feature(excel_path, converted_table_path, feature_path,
                                 join_field=JOIN_FIELD, col_name=COL_NAME, sheet_name=SHEET_NAME):
+    """
+    Imports a specified Excel sheet, joins it to a feature class, and copies a column value into a new field.
+
+    Parameters:
+        excel_path (str): Path to the Excel file.
+        converted_table_path (str): Path for the in-memory table created from the Excel sheet.
+        feature_path (str): Path to the feature class.
+        join_field (str): Common Field name used to join the Excel table and feature class.
+        col_name (str): Name of the column to copy from the Excel table.
+        sheet_name (str): Name of the sheet within the Excel file.
+
+    Raises:
+        ValueError: If the specified sheet name does not exist in the Excel file.
+    """
+
+    try:
+        arcpy.ExcelToTable_conversion(excel_path, converted_table_path, sheet_name)
+    except arcpy.ExecuteError:
+        raise ValueError(f"Failed to convert Excel sheet '{sheet_name}'. Check that the sheet name is correct and exists in the file.")
+
     arcpy.ExcelToTable_conversion(excel_path, converted_table_path, sheet_name)
     arcpy.MakeFeatureLayer_management(feature_path, "temp_layer")
     arcpy.AddJoin_management("temp_layer", join_field, converted_table_path, join_field)
