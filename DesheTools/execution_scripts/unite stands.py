@@ -10,9 +10,9 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\16.3.2025 - unite stands\tzora_product_forDedi.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3233_fnl')
-    input_unitelines = os.path.join(input_workspace, 'unite_L')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\5.10.2025\smy_Turan2024_BKP_25082024.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
+    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני__Project')
     #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -5656,6 +5656,9 @@ if missingFields:
 del smallFieldObj, fieldsToCheck_relatedTable, fieldsToCheck_relted_tables, fieldsToCheck_relatedTable_specific, fieldsToCheck_relted_points, destination
 
 #### Process section 1: ####
+#@ This section causes tool to fail to unite >2 stands.
+#@ Suspend until better error handling mechanism is formed.
+"""
 #A) Delete product polygons of previous calculation.
 arcpy.AddMessage('Deleting previous product stands and their related rows.')
 orig_field = fieldsDict[unitelines_stands_relationship['originKey_code']].name
@@ -5692,7 +5695,7 @@ if stand_Keys:
         with arcpy.da.UpdateCursor(relationshipClass.destination.fullPath, [dest_field], where_clause=sql_expression) as uc:
             for r in uc:
                 uc.deleteRow()
-
+"""
 
 
 #### Process section 2: ####
