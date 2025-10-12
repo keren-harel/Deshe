@@ -3131,8 +3131,11 @@ class PoductPolygon(FcRow):
         """
         Takes density values of source stands.
         Inputs: mode <str> - 'general' / 'stand'.
-        Validation: if value is in [None, "לא רלוונטי", "אין עצים"]: notify and return it. 
-        Process: weighted sum of index.
+        Validation: if value is None - notify and return it. 
+        Process: 
+        - for qualtitive values: weighted sum of index
+        - for values that contain "לא רלוונטי" or "אין עצים" -
+          manage according to mode (see section 20 of debugging document).
         Returns: category <str>
         """
         StepNames = {
@@ -3161,27 +3164,57 @@ class PoductPolygon(FcRow):
         matrix = self.getMatrix_self(fieldCode)
 
         # VALIDATION:
-        # in case any value is one of the following: [None, "לא רלוונטי", "אין עצים"],
-        # notify and return this value.
+        # in case any value None - notify and return this value.
         exceptionValues = [None] + domainValues[:2]
         inputValues = [tup[1] for tup in matrix]
         for inputValue in inputValues:
-            if inputValue in exceptionValues:
-                # value is from [null, "לא רלוונטי", "אין עצים"]
-                # return defaultValue.
-                return defaultValue
+            if inputValue is None:
+                txt = "input value is None."
+                self.notifier.add(stepName, 'warning', txt)
+                return None
             elif inputValue not in domainValues:
                 # value is entirely not from domain AND is not None.
                 # notify and return None
                 txt = "input value is not from domain: %s" % inputValue
                 self.notifier.add(stepName, 'warning', txt)
                 return None
+            else:
+                # values are valid, continue to logic.
+                pass
 
         # LOGIC:
-        # at this point we are confident that the values are from domainValues[2:]
-        weighted_value = normal_round(sum([proportion*domainValues.index(category) for proportion, category in matrix]))
-        result = domainValues[weighted_value]
-        return result
+        # at this point we are confident that the values from the domain.
+        # if both values are from domainValues[2:] - calculate weighted average.
+        # if any value is from domainValues[:2] - manage according to mode.
+        # (difference by mode - as explained in section 20 of the debuging document).
+        if all([val in domainValues[2:] for val in inputValues]):
+            weighted_value = normal_round(sum([proportion*domainValues.index(category) for proportion, category in matrix]))
+            result = domainValues[weighted_value]
+            return result
+        elif mode == 'general':
+            if domainValues[0] in inputValues:
+                # any of the values is None or "לא רלוונטי" - return THIS value.
+                result = domainValues[0]
+                return result
+            elif domainValues[1] in inputValues:
+                # any of the values is "אין עצים" - return the OTHER value.
+                index = inputValues.index(domainValues[1])
+                result = inputValues[1-index]
+                return result
+        elif mode == 'stand':
+            if any([val in domainValues[2:] for val in inputValues]):
+                # any of the values is from domainValues[2:] - return it
+                index = [domainValues.index(val) for val in inputValues if val in domainValues[2:]][0]
+                result = domainValues[index]
+                return result
+            elif domainValues[0] in inputValues:
+                # any of the values is None or "לא רלוונטי" - return THIS value.
+                result = domainValues[0]
+                return result
+            else:
+                # both values are "אין עצים" - return this value.
+                result = domainValues[1]
+                return result
 
     def c__relativedensity(self, agegroup, generaldensity, beitgidul):
         """
@@ -3261,7 +3294,7 @@ class PoductPolygon(FcRow):
         result = None
         if self.areaDominance:
             result = matrix[0][1]
-        elif generalDensity_0 in ["לא רלוונטי", "אין עצים", None]:
+        elif generalDensity_0 in domainValues[:2]:
             result = matrix[1][1]
         else:
             seniorIndex = max([domainValues.index(t[1]) for t in matrix])
