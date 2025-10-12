@@ -10,9 +10,9 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\5.10.2025\smy_Turan2024_BKP_25082024.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
-    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני__Project')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
+    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
     #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -3926,10 +3926,11 @@ class PoductPolygon(FcRow):
             # get cover:
             # a single cover value for all the species in the stand.
             # set a default cover
-            stand_cover = 0
+            stand_cover = 1
             try:
                 rawValues = matrix_covers[stand_i][1]
-                stand_cover = int([tup[1] for tup in rawValues if tup[0] == planttypeKey][0])
+                # use max in case of rawVales in lower than default (e.g 0)
+                stand_cover = max(stand_cover, int([tup[1] for tup in rawValues if tup[0] == planttypeKey][0]))
             except:
                 sourceStandID = self.stands[stand_i].id
                 txt = 'unable to get cover of %s from planttype related table (source stand ID: %s)' \
