@@ -1,4 +1,4 @@
-# last edit: 240425 14:00
+# last edit: 01-09-2025 18:00
 
 import arcpy
 import pandas as pd
@@ -91,18 +91,9 @@ def dict_to_FeatureClass(my_dict, output_feature_class, spatial_reference):
     
     arcpy.da.NumPyArrayToFeatureClass(array, output_feature_class,('x', 'y'), spatial_reference)
 
-#? צריך לשנות את שם הפונקציה 
-def density_null(data_frame, Field_to_check):
-    null_df = data_frame[pd.isna(data_frame[Field_to_check])]
+def find_nulls(data_frame, field_to_check):
+    null_df = data_frame[pd.isna(data_frame[field_to_check])]
     return null_df
-
-#! גרסה ישנה של הפונקציה - אפשר להסיר
-#? האם כדאי להסיר את הפונקציה הזו לגמרי? מדוע יש שימוש ברשימה? זה טוב למשהו
-def missing_values(data_frame, var, id):
-    null_data = data_frame[pd.isna(data_frame[var])]
-    # Extract unique identifiers (OIDs) for rows with missing values
-    problem_oids = null_data[id].tolist()
-    return problem_oids
 
 def sum_not_10(data_frame, id, calc_field):
     sum_fiels = data_frame.groupby(id).agg({
@@ -173,8 +164,45 @@ error_dict = {
     "VitalForest": [],
     "InvasiveSpecies": [],
     "note": [],
-    "receck": []    
+    "receck": []
+    }
+
+# Dictionary to store reception problems detected in the forest
+dict_reception = {
+    "TmiraTreeSpName1": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "TmiraTreeSpName2": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "TmiraTreeSpName3": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "HighTreeSpName1": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "HighTreeSpName2": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "HighTreeSpName3": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "MidTreeSpName1": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "MidTreeSpName2": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "MidTreeSpName3": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "MidTreeSpNames": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SubTreeSpName1": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SubTreeSpName2": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SubTreeSpName3": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SubTreeSpNames": ["פונקציות JavaScript מושבתות.", "פונקציות JavaScript מושבתות.,פונקציות JavaScript מושבתות.,פונקציות JavaScript מושבתות."],
+    "SpShrub1": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SpShrub2": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SpShrub3": ["פונקציות JavaScript מושבתות.", "error_text2"],
+    "SpShrubNames": ["פונקציות JavaScript מושבתות.", "פונקציות JavaScript מושבתות.,פונקציות JavaScript מושבתות.,פונקציות JavaScript מושבתות."],
 }
+
+# Function to find reception problems in the forest DataFrame
+def find_reception_problems(df_point):
+    reception_issues = {}
+
+    for column, error_values in dict_reception.items():
+        if column in df_point.columns:
+            # Check if any error value appears as substring in the cell
+            mask = df_point[column].astype(str).apply(
+                lambda val: any(err in val for err in error_values if pd.notnull(val))
+            )
+            if mask.any():
+                reception_issues[column] = df_point[mask]
+
+    return reception_issues
 
 
 # Input parameters from ArcGIS tool box
@@ -213,32 +241,27 @@ intermediate_layers.append(points)
 points_data = point_to_data(points)
 df = reduced_table(points_data) 
 
+#Define the set of stand IDs
+stands = set(df['standID'])
+
 
 # For each stand, distances between each pair of points are calculated.
 # Points with distances less than 110 units are considered valid pairs.
-stands = set(df['standID'])
-valid_pairs = []  
-list = []
-
+valid_pairs = []
+point_list = []
 for stand in stands:
     perStand = df.loc[df["standID"] == stand]
-    list.clear()
-
+    point_list.clear()
     for x, y in zip(perStand["point_x"], perStand["point_y"]):
-        list.append([x, y])
-
-    # Calculate pairwise distances
-    point_dist = pdist(list)
+        point_list.append([x, y])
+    point_dist = pdist(point_list)
     dist_matrix = squareform(point_dist)
-
-    # Find indices where distance is less than 115
     valid_indices = np.where(dist_matrix < 110)
-    
-    # Extract valid point pairs
     for i, j in zip(*valid_indices):
-        if i < j:  # Avoid duplicate pairs
-            valid_pairs.append(list[i])
-            valid_pairs.append(list[j])
+        if i < j:
+            valid_pairs.append(point_list[i])
+            valid_pairs.append(point_list[j])
+
 
 # If valid pairs are found, they are converted to a Pandas DataFrame, then to a NumPy array,
 # and finally output as a new GIS feature class.
@@ -251,6 +274,58 @@ if valid_pairs:
     arcpy.da.NumPyArrayToFeatureClass(array, output_doublePoints, ("x", "y"),sr)
 else:
     arcpy.AddWarning("No valid point pairs found.")
+
+
+#!---------------------------------
+#! reception_problems:
+#!---------------------------------
+
+# Input feature class
+input_smy_points = input_points_layer
+
+# List to store row data
+data = []
+
+# Extract field names from the dictionary
+reception_fields = list(dict_reception.keys())
+
+# Add basic fields
+fields_needed = ["SHAPE@XY", "GlobalID"] + reception_fields
+
+# Create a search cursor to iterate through the point features
+with arcpy.da.SearchCursor(input_smy_points, fields_needed) as cursor:
+    for rec in cursor:
+        cor_x, cor_y = rec[0]
+        row_dict = {
+            "globalid": rec[1],
+            "X_coords": cor_x,
+            "Y_coords": cor_y
+        }
+
+        # Add reception fields dynamically
+        for i, field in enumerate(reception_fields, start=2):  # start=2 because rec[0] and rec[1] are already used
+            row_dict[field] = rec[i]
+
+        data.append(row_dict)
+
+# Create a DataFrame from the list
+df_point = pd.DataFrame(data)
+
+# Find reception problems
+reception_issues = find_reception_problems(df_point)
+
+# Add errors to the error dictionary
+for field, issues_df in reception_issues.items():
+    if not issues_df.empty:
+        error_to_dict(issues_df, "note", "Reception problem detected – see message window for details")
+
+#  Print summary of issues
+for field, issues_df in reception_issues.items():
+    if not issues_df.empty:
+        arcpy.AddWarning(f"\nReception issues found in field: {field}")
+        for _, row in issues_df.iterrows():
+            arcpy.AddMessage(f"GlobalID: {row['globalid']}, X: {row['X_coords']}, Y: {row['Y_coords']}, Value: {row[field]}")
+
 
 #!---------------------------------
 #! Create basic table of coordinates and a GlobalID's for connectivity to related tables
@@ -296,11 +371,11 @@ with arcpy.da.SearchCursor(input_smy_points, ["SHAPE@XY", "GlobalID", "GeneralDe
 # Create a DataFrame from the list
 df_point = pd.DataFrame(data, columns=["globalid", "X_coords", "Y_coords", "GeneralDensity", "StandDensity"])
 
-null_data = density_null(df_point, "GeneralDensity")
+null_data = find_nulls(df_point, "GeneralDensity")
 if not null_data.empty:
     error_to_dict(null_data, "GeneralDensity", "GeneralDensity_na")
 
-null_data = density_null(df_point, "StandDensity")
+null_data = find_nulls(df_point, "StandDensity")
 if not null_data.empty:
     error_to_dict(null_data, "GeneralDensity", "StandDensity_na")
 
@@ -319,14 +394,12 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "DominTree", "Proportion"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        DominTree = cursor[1]
-        if cursor[2] is not None:
-            Proportion = int(cursor[2])
+        globalid = rec[0]
+        DominTree = rec[1]
+        if rec[2] is not None:
+            Proportion = int(rec[2])
         else:
-            Proportion = None  
-        
-        # Append the row data to the list
+            Proportion = None
         data.append([globalid, DominTree, Proportion])
 
 # Create a DataFrame from the list
@@ -340,8 +413,8 @@ df_StartRepeatDominTree = joined_df[['globalid', 'X_coords', 'Y_coords', 'DominT
 
 # Check for missing values in 'DominTree' and 'Proportion'
 empty_StartRepeatDominTree = emptyTable(df_coords, df_StartRepeatDominTree)
-missing_domin_tree = density_null(df_StartRepeatDominTree, "DominTree")
-missing_proportion = density_null(df_StartRepeatDominTree, "Proportion")
+missing_domin_tree = find_nulls(df_StartRepeatDominTree, "DominTree")
+missing_proportion = find_nulls(df_StartRepeatDominTree, "Proportion")
 error_proportion = sum_not_10(df_StartRepeatDominTree, "globalid", "Proportion")
 duplicates_DominTree = check_duplicates(df_StartRepeatDominTree, "globalid", "DominTree")
 
@@ -370,12 +443,12 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "PercentByTen", "PlantType"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        if cursor[1] is not None:
-            PercentByTen = int(cursor[1])
+        globalid = rec[0]
+        if rec[1] is not None:
+            PercentByTen = int(rec[1])
         else:
             PercentByTen = None  
-        PlantType = cursor[2]
+        PlantType = rec[2]
         # Append the row data to the list        
         data.append([globalid, PercentByTen, PlantType])
 
@@ -390,16 +463,16 @@ df_PlantTypeCoverDistribut = joined_df[['globalid', 'X_coords', 'Y_coords', 'Per
 
 # Check for missing values in 'DominTree' and 'Proportion'
 empty_PlantTypeCoverDistribut = emptyTable(df_coords, df_PlantTypeCoverDistribut)
-missing_PercentByTen = density_null(df_PlantTypeCoverDistribut, "PercentByTen")
-missing_PlantType = density_null(df_PlantTypeCoverDistribut, "PlantType")
+missing_PercentByTen = find_nulls(df_PlantTypeCoverDistribut, "PercentByTen")
+missing_PlantType = find_nulls(df_PlantTypeCoverDistribut, "PlantType")
 smaller_PercentByTen = sum_less_than_100(df_PlantTypeCoverDistribut, "globalid", "PercentByTen")
 duplicates_PlantType  = check_duplicates(df_PlantTypeCoverDistribut, "globalid", "PlantType")
 
 if df_PlantTypeCoverDistribut.empty: 
     arcpy.AddWarning("PlantTypeCoverDistribut Table is empty!")
 else:
-    if not empty_StartRepeatDominTree.empty:
-        error_to_dict(empty_StartRepeatDominTree, "PlantTypeCoverDistribut", "{EMPTY_TABLE}")
+    if not empty_PlantTypeCoverDistribut.empty:
+        error_to_dict(empty_PlantTypeCoverDistribut, "PlantTypeCoverDistribut", "{EMPTY_TABLE}")
     if not duplicates_PlantType.empty:
         error_to_dict(duplicates_PlantType, "PlantTypeCoverDistribut", "{double_PlantType}")
     if not missing_PercentByTen.empty:
@@ -421,9 +494,9 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "InvasiveSpecie", "EpicenterType"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        InvasiveSpecie = cursor[1]
-        EpicenterType = cursor[2]
+        globalid = rec[0]
+        InvasiveSpecie = rec[1]
+        EpicenterType = rec[2]
         # Append the row data to the list
         data.append([globalid, InvasiveSpecie, EpicenterType])
 
@@ -442,7 +515,7 @@ df_InvasiveSpecies = joined_df[['globalid', 'X_coords', 'Y_coords', 'InvasiveSpe
 filtered_df = df_InvasiveSpecies.dropna(subset=['InvasiveSpecie'])
 filtered_df = filtered_df[filtered_df['InvasiveSpecie'] != 'אין']
 
-missing_EpicenterType = density_null(filtered_df,"EpicenterType")
+missing_EpicenterType = find_nulls(filtered_df,"EpicenterType")
 duplicates_InvasiveSpecie  = check_duplicates(df_InvasiveSpecies, "globalid", "InvasiveSpecie")
 
 if df_InvasiveSpecies.empty:
@@ -465,9 +538,9 @@ data = []
 # Create a search cursor to iterate through the point features
 with arcpy.da.SearchCursor(relationship_class, ["parentglobalid", "ForestDefect", "PercentImpact"]) as cursor:
     for rec in cursor:
-        globalid = cursor[0]
-        ForestDefect = cursor[1]
-        PercentImpact = cursor[2]
+        globalid = rec[0]
+        ForestDefect = rec[1]
+        PercentImpact = rec[2]
         # Append the row data to the list
         data.append([globalid, ForestDefect, PercentImpact])
 
@@ -485,12 +558,12 @@ df_VitalForest = joined_df[['globalid', 'X_coords', 'Y_coords', 'ForestDefect', 
 filtered_df = df_VitalForest.dropna(subset=['ForestDefect'])
 filtered_df = filtered_df[filtered_df['ForestDefect'] != 'אין']
 
-missing_PercentImpact = density_null(filtered_df,"PercentImpact")
+missing_PercentImpact = find_nulls(filtered_df,"PercentImpact")
 duplicates_ForestDefect  = check_duplicates(df_VitalForest, "globalid", "ForestDefect")
 
 
 if df_VitalForest.empty:
-    arcpy.AddWarning("Invasive Species Table is Empty!")
+    arcpy.AddWarning("Vital Forest Table is Empty!")
 else:
     if not duplicates_ForestDefect.empty:
         error_to_dict(duplicates_ForestDefect, "VitalForest", "{double_ForestDefect}")
@@ -513,6 +586,7 @@ try:
 except Exception as e:
     arcpy.AddError(f"An error occurred while adding layers to the map: {str(e)}")
 arcpy.AddMessage("Clears temporary layers and updates symbology...")
+
 #!---------------------------------
 #! Cosmetic repairs
 #!---------------------------------

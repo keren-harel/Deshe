@@ -1,0 +1,41 @@
+הערות קוויות קקל
+
+
+<table cellpadding="0px" cellspacing="3px">
+<tbody>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>מספר הערה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{Note_Number}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>עומדים לבדיקה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{relvStands}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הצעה</b></td><td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{Suggestion}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הסבר</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{Explanation}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הערות לסוקר</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{MappingNotes}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>החלטת הסוקר</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{surveyDecision}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>תאריך ושעה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{DateRemark}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>הסבר להחלטה</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{Describe}<br /></td>
+</tr>
+<tr valign="top">
+<td style="width:125px; text-align:left; background-color:#e6e6e6; padding:5px"><b>שם סוקר</b></td>
+<td style="width:225px; text-align:left; background-color:#e6e6e6; padding:5px">{SokerName}</td>
+</tr>
+</tbody></table>
