@@ -1,7 +1,14 @@
 ﻿# -*- coding: utf-8 -*-
 import arcpy, os, math
+from pathlib import Path
 
 #VARIABLES:
+DESHE_TOOLS_FOLDER_PATH = str(Path(__file__).parents[1].absolute())
+EXCEL_NAME = "classifyTypeCover_Key.xlsx"
+SHEET_NAME = "cover_type_keys"
+CONF_FOLDER_NAME = "configuration"
+JOIN_FIELD = "COV_TYPE"
+COL_NAME = "result"
 natua_possibilities = [
     "עשבוני",
     "בתה",
@@ -11,17 +18,18 @@ natua_possibilities = [
 distanceThreshold = 113
 maxTrials = 3
 
+
 omdim_FC = arcpy.GetParameter(0)
 processSelectedFeatures = arcpy.GetParameter(1)
 if not processSelectedFeatures:
     #@validate
     omdim_FC = arcpy.Describe(omdim_FC).catalogPath
-outputFC = arcpy.GetParameter(3)
+outputFC = arcpy.GetParameter(2)
 output_location = arcpy.Describe(outputFC).path
 output_FCName = arcpy.Describe(outputFC).basename
 
 #natua_fieldName = 'MainForestLayerVegForm2' #PARAMETER
-natua_fieldName = arcpy.GetParameter(2)
+natua_fieldName = COL_NAME
 
 output_FieldOmedObjecID = "omedFID"
 output_FieldBelowThreshold = "distanceBelowThreshold"
@@ -208,8 +216,49 @@ class Cube:
         self.distanceToBoundary = self.centroid.distanceTo(self.cluster.boundary)
 
 
+def copy_excel_field_to_feature(excel_path, converted_table_path, feature_path,
+                                join_field=JOIN_FIELD, col_name=COL_NAME, sheet_name=SHEET_NAME):
+    """
+    Imports a specified Excel sheet, joins it to a feature class, and copies a column value into a new field.
+
+    Parameters:
+        excel_path (str): Path to the Excel file.
+        converted_table_path (str): Path for the in-memory table created from the Excel sheet.
+        feature_path (str): Path to the feature class.
+        join_field (str): Common Field name used to join the Excel table and feature class.
+        col_name (str): Name of the column to copy from the Excel table.
+        sheet_name (str): Name of the sheet within the Excel file.
+
+    Raises:
+        ValueError: If the specified sheet name does not exist in the Excel file.
+    """
+
+    try:
+        arcpy.ExcelToTable_conversion(excel_path, converted_table_path, sheet_name)
+    except arcpy.ExecuteError:
+        raise ValueError(f"Failed to convert Excel sheet '{sheet_name}'. Check that the sheet name is correct and exists in the file.")
+
+    arcpy.ExcelToTable_conversion(excel_path, converted_table_path, sheet_name)
+    arcpy.MakeFeatureLayer_management(feature_path, "temp_layer")
+    arcpy.AddJoin_management("temp_layer", join_field, converted_table_path, join_field)
+    arcpy.AddField_management(feature_path, col_name, "TEXT")
+    table_name = os.path.basename(converted_table_path)
+    expression = f"!{table_name}.{col_name}!"
+    arcpy.CalculateField_management("temp_layer", col_name, expression, "PYTHON3")
+
+    arcpy.RemoveJoin_management("temp_layer")
+    arcpy.Delete_management("temp_layer")
+    arcpy.Delete_management(converted_table_path)
+
+
 #PROCESS:
 #@VALIDATION MUST INCLUDE SR = itm!!!
+configuration_path = os.path.join(DESHE_TOOLS_FOLDER_PATH, CONF_FOLDER_NAME)
+excel_path = os.path.join(configuration_path, EXCEL_NAME)
+temp_table_path = r"in_memory\excel_table"
+
+copy_excel_field_to_feature(excel_path, temp_table_path, omdim_FC)
+
 if arcpy.Describe(omdim_FC).spatialreference.factoryCode != 2039:
     arcpy.AddError("Input feature class projection must be Israel_TM_Grid (2039)")
 
@@ -247,3 +296,4 @@ del searchC, insertC
 
 for item in toBeDeleted:
     arcpy.management.Delete(item)
+
