@@ -14,7 +14,7 @@ if debug_mode:
     input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
     input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני__Project')
     input_sekerpoints = os.path.join(input_workspace, 'smy_Turan2024')
-    #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
+    #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 else:
     input_stands = arcpy.GetParameter(0)
@@ -29,8 +29,8 @@ else:
     #Take all the features, even if layar has selection.
     input_sekerpoints = arcpy.Describe(input_sekerpoints).catalogPath
 
-    input_configurationFolder = arcpy.GetParameterAsText(3)
-    #input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
+    #input_configurationFolder = arcpy.GetParameterAsText(3)
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 
 
 #VARIABLES

@@ -13,7 +13,7 @@ if debug_mode:
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
     input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
     input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
-    #input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
+    #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
 else:
@@ -25,10 +25,10 @@ else:
     #Take all the features, even if layar has selection.
     input_unitelines = arcpy.Describe(input_unitelines).catalogPath
 
-    input_configurationFolder = arcpy.GetParameterAsText(2)
-    #input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
+    #input_configurationFolder = arcpy.GetParameterAsText(2)
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 
-    input_beitGidul = arcpy.GetParameterAsText(3)
+    input_beitGidul = arcpy.GetParameterAsText(2)
 
 
 #VARIABLES

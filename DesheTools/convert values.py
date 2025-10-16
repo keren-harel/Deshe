@@ -15,7 +15,8 @@ if debug_mode:
     #debug parameters
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\29.7.2024\smy_NahalTut_BKP_22062024.gdb'
     input_table = os.path.join(input_workspace, 'smy_NahalTut_1')
-    input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\עבודה\configuration'
+    #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_tableQuery = 'points'
 else:
     input_table = arcpy.GetParameterAsText(0)
@@ -23,8 +24,9 @@ else:
     #Take all the features, even if layar has selection.
     input_table = arcpy.Describe(input_table).catalogPath
     """
-    input_configurationFolder = arcpy.GetParameterAsText(1)
-    input_tableQuery = arcpy.GetParameterAsText(2)
+    #input_configurationFolder = arcpy.GetParameterAsText(1)
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
+    input_tableQuery = arcpy.GetParameterAsText(1)
 
 #VARIABLES
 fieldsExcel = os.path.join(input_configurationFolder, 'fields.xlsx')
