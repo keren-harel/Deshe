@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import traceback
 import arcpy
 import json
 import math
@@ -10,9 +11,9 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\22.7.2025 - apply\NirEtzion_1111_verification.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_1111_fnl')
-    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשני_ExportFeatures')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
+    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשניגלעד_ExportFeatures_ExportFeatures')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -2446,7 +2447,6 @@ class FcRow:
             where_clause = sqlQuery,
             )
         for rel_Row in rel_Uc:
-            print(rel_Row[0]) #INDICATE
             rel_Uc.deleteRow()
         del rel_Uc
 
@@ -2478,15 +2478,38 @@ class UniteLine(FcRow):
 
             # Create a Product Polygon (new stand) object
             sql_expression = f"{org.stands.oidFieldName} = {productPolygon_ID}"
-            prod_uc = arcpy.UpdateCursor(org.stands.fullPath, sql_expression)
-            prod_r = prod_uc.next()
-            self.productPolygon = PoductPolygon(self, prod_r, org.stands)
+            try:
+                prod_uc = arcpy.UpdateCursor(org.stands.fullPath, sql_expression)
+                prod_r = prod_uc.next()
+                self.productPolygon = PoductPolygon(self, prod_r, org.stands)
+                self.productPolygon.calculateAndWrite()
+            except Exception as e:
+                # Notify to line feature's comments:
+                txt = f"error while running product polygon: {str(e)}"
+                self.notifier.add('global exception', 'warning', txt)
+                # Notify full traceback to user interface:
+                error_details = traceback.format_exc()
+                arcpy.AddMessage('--- Full Traceback: ---')
+                print(error_details)
+                arcpy.AddMessage(error_details)
 
-            self.productPolygon.calculateAndWrite()
-            prod_uc.updateRow(self.productPolygon.row)
-            del prod_uc
-            
-            calculatedJoints.append(self)
+                if hasattr(self, "productPolygon"):
+                    # Delete newly created product polygon row AND its related data:
+                    # Rows from related tables:
+                    for relationship_nickname in ['st1', 'st2', 'st3', 'st4']:
+                        self.productPolygon.deleteRelated(relationship_nickname)
+                    # Row of product polygon itself:
+                    self.deleteRelated('ls')
+                    # Un-relate the polygon from its line: 
+                    # i.e, set line attribute "stand_ID" to null
+                    self.productPolygon.unrelate()
+            else:
+                # try block completed successfully
+                prod_uc.updateRow(self.productPolygon.row)
+                calculatedJoints.append(self)
+            finally:
+                if 'prod_uc' in locals():
+                    del prod_uc
         
         else:
             # write joint status:
@@ -2746,6 +2769,14 @@ class PoductPolygon(FcRow):
         relationship = org.relationships['ls']
         stand_ID = self.row.getValue(relationship.foreignKey_fieldName)
         self.parent.row.setValue(relationship.originKey_fieldName, stand_ID)
+        return
+
+    def unrelate(self):
+        """
+        Un-relate this polygon from its unite line (parent).
+        """
+        relationship = org.relationships['ls']
+        self.parent.row.setNull(relationship.originKey_fieldName)
         return
 
     def getStamp(self):
