@@ -6,7 +6,6 @@ import math
 import datetime
 from collections import Counter
 
-
 #TOOL PARAMETERS
 debug_mode = False
 addFields = True
@@ -15,7 +14,8 @@ if debug_mode:
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.5.2025\smy_Turan2024_BKP_25082024.gdb'
     input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
     input_sekerpoints = os.path.join(input_workspace, 'smy_Turan2024')
-    input_configurationFolder = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\Github - Deshe\Deshe\DesheTools\configuration'
+    #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
 else:
     input_stands = arcpy.GetParameter(0)
@@ -26,9 +26,10 @@ else:
     #Take all the features, even if layar has selection.
     input_sekerpoints = arcpy.Describe(input_sekerpoints).catalogPath
 
-    input_configurationFolder = arcpy.GetParameterAsText(2)
+    #input_configurationFolder = arcpy.GetParameterAsText(2)
+    input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
 
-    input_beitGidul = arcpy.GetParameterAsText(3)
+    input_beitGidul = arcpy.GetParameterAsText(2)
 
 
 #VARIABLES
