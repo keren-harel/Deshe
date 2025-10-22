@@ -5721,8 +5721,8 @@ if missingFields:
 del smallFieldObj, fieldsToCheck_relatedTable, fieldsToCheck_relted_tables, fieldsToCheck_relatedTable_specific, fieldsToCheck_relted_points, destination
 
 #### Process section 1: ####
-#@ This section causes tool to fail to unite >2 stands.
-#@ Suspend until better error handling mechanism is formed.
+# This section used to cause the tool to fail uniting >2 stands, 
+# now, a better mechanism exists.
 """
 #A) Delete product polygons of previous calculation.
 arcpy.AddMessage('Deleting previous product stands and their related rows.')
@@ -5761,7 +5761,6 @@ if stand_Keys:
             for r in uc:
                 uc.deleteRow()
 """
-
 
 #### Process section 2: ####
 # Create fields in unite lines
