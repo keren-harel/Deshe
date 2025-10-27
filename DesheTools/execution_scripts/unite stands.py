@@ -11,9 +11,9 @@ import numpy as np
 debug_mode = False
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.22 - Copy\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
     input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
-    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשניגלעד_ExportFeatures_ExportFeatures')
+    input_unitelines = os.path.join(input_workspace, 'LineRemarks_for_SecondDiscusison_Galed')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -5911,7 +5911,7 @@ calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
-    #where_clause = 'OBJECTID > 130', #for debug!!!
+    #where_clause = 'OBJECTID IN (41,25,38)', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
