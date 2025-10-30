@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שני 15 ספטמבר 2025 18:01:31</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\‏‏smy2kkl_param.py", line 130
+﻿    tab_df[fld] = tab[fld].apply(update_codes))
+﻿                                              ^
+﻿SyntaxError: unmatched ')'
+﻿</msg><msg code="0" type="0">Failed script 2. Convert To KKL Standard...</msg><msg code="-2147467259" type="100">Failed to execute (ConvertToKKLStandard).</msg><msg code="0" type="3">Failed at יום שני 15 ספטמבר 2025 18:01:32 (Elapsed Time: 0.14 seconds)</msg></messages>
