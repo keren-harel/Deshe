@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 15 מאי 2025 09:46:06</msg><msg code="0" type="0">Executing: Verification C:\MDGISS\devs\smy2kkl\SMYDATA\Harovit_3254_verification.gdb</msg><msg code="0" type="2">Start Time: יום חמישי 15 מאי 2025 09:46:06</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\‏‏smy_verification_param.py", line 552
+﻿    arcpy.AddMessage('# 12. Check zero values in fields of both layers: primary_layerCover,
+﻿                     ^
+﻿SyntaxError: unterminated string literal (detected at line 552)
+﻿
+If you suspect this is an IPython 8.18.1 bug, please report it at:
+    https://github.com/ipython/ipython/issues
+or send an email to the mailing list at ipython-dev@python.org
+
+You can print a more detailed traceback right now with "%tb", or use "%debug"
+to interactively debug it.
+
+Extra-detailed tracebacks for bug-reporting purposes can be enabled via:
+    %config Application.verbose_crash=True
+
+</msg><msg code="0" type="0">Failed script 1. Verification...</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום חמישי 15 מאי 2025 09:46:06 (Elapsed Time: 0.06 seconds)</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום חמישי 15 מאי 2025 09:46:06 (Elapsed Time: 0.07 seconds)</msg></messages>

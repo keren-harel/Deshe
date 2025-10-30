@@ -1,5 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 07 דצמבר 2023 09:00:05</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\smyAppend2SDE_param.py", line 24
-    gdb_sde_dic ={'samples':'SMY_Samples',
-    ^
-IndentationError: expected an indented block
-</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום חמישי 07 דצמבר 2023 09:00:05 (Elapsed Time: 0.03 seconds)</msg></messages>

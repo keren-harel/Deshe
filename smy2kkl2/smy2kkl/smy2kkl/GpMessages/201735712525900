@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 15 מאי 2025 08:28:40</msg><msg code="0" type="0">Executing: Verification C:\MDGISS\devs\smy2kkl\SMYDATA\NirEtzion_1111_verification.gdb</msg><msg code="0" type="2">Start Time: יום חמישי 15 מאי 2025 08:28:40</msg><msg code="-2147467259" type="100">  File "C:\MDGISS\devs\smy2kkl\Scripts\‏‏smy_verification_param.py", line 473
+﻿    flds_dic = {stands:['OID@', 'HELKA', 'STAND_NO','CoverTypeCode', 'ForestVegForm',
+﻿               ^
+﻿SyntaxError: '{' was never closed
+﻿
+If you suspect this is an IPython 8.18.1 bug, please report it at:
+    https://github.com/ipython/ipython/issues
+or send an email to the mailing list at ipython-dev@python.org
+
+You can print a more detailed traceback right now with "%tb", or use "%debug"
+to interactively debug it.
+
+Extra-detailed tracebacks for bug-reporting purposes can be enabled via:
+    %config Application.verbose_crash=True
+
+</msg><msg code="0" type="0">Failed script 1. Verification...</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום חמישי 15 מאי 2025 08:28:40 (Elapsed Time: 0.06 seconds)</msg><msg code="-2147467259" type="100">Failed to execute (Verification).</msg><msg code="0" type="3">Failed at יום חמישי 15 מאי 2025 08:28:40 (Elapsed Time: 0.07 seconds)</msg></messages>
