@@ -8,7 +8,7 @@ from collections import Counter
 import numpy as np
 
 #TOOL PARAMETERS
-debug_mode = True
+debug_mode = False
 if debug_mode:
     #debug parameters
     input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.11.12\smy_Yuvalim_BKP_180625_1_2.gdb'
@@ -5911,7 +5911,7 @@ calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
-    where_clause = 'OBJECTID IN (1, 2)', #for debug!!!
+    #where_clause = 'OBJECTID IN (41,25,38)', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
