@@ -11,9 +11,9 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.5.2025\smy_Turan2024_BKP_25082024.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_1402_fnl')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_Turan2024')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Galed')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"

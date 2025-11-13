@@ -8,12 +8,12 @@ from collections import Counter
 import numpy as np
 
 #TOOL PARAMETERS
-debug_mode = False
+debug_mode = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
-    input_unitelines = os.path.join(input_workspace, 'הערותקוויותלדיוןשניגלעד_ExportFeatures_ExportFeatures')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.11.12\smy_Yuvalim_BKP_180625_1_2.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1349_fnl')
+    input_unitelines = os.path.join(input_workspace, 'LineRemarks_after2Discussion_for_unite_stands')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -592,7 +592,7 @@ def roundToNearestBase(numbers, base):
     if not, it will add or substract X from the numbers with
     the largest difference between original and rounded value.
     """
-    target_sum = sum(numbers)
+    target_sum = round(sum(numbers))
     rounded_numbers = np.round(np.array(numbers) / base) * base
     difference = target_sum - np.sum(rounded_numbers)
         
@@ -5911,7 +5911,7 @@ calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
-    #where_clause = 'OBJECTID > 130', #for debug!!!
+    where_clause = 'OBJECTID IN (1, 2)', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
