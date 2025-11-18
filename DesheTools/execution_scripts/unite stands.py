@@ -3656,6 +3656,8 @@ class PoductPolygon(FcRow):
         
 
         # LOGIC:
+        # at this point speciesCodes_byStand lists are not empty.
+
         # area dominance, and the dominant stand has species codes
         if self.areaDominance and speciesCodes_byStand[0]:
             speciesCodes = speciesCodes_byStand[0]
@@ -3684,6 +3686,8 @@ class PoductPolygon(FcRow):
         if not organizing_vegForms:
             # none of the output stand veg forms appears in organizingVegForm_hierarchy.
             # return empty dict.
+            txt = "product stand's %s vegForm does not appear in %s." % (layerToShortText[layerNum], organizingVegForm_hierarchy)
+            self.notifier.add(stepName,'message', txt)
             return outdict
         
         # get organizing_vegForms's group species codes
@@ -3725,6 +3729,9 @@ class PoductPolygon(FcRow):
 
         if speciesCount == 0:
             # no species found - return empty dict
+            speciesNames = [speciesDict[int(sc)] for sc in speciesCodes_byStand[0] + speciesCodes_byStand[1]]
+            txt = "source stands' %s species %s are not under %s." % (layerToShortText[layerNum], speciesNames, organizing_vegForms)
+            self.notifier.add(stepName,'message', txt)
             return outdict
         elif speciesCount <= 3 or speciesGroupCount == 1:
             # collect species codes, sort by weightedValue and return
