@@ -2068,6 +2068,9 @@ class Notifier:
                 'layerVegForm_tmira',
                 'layerVegForm_high',
                 'layerVegForm_mid',
+                'species_tmira',
+                'species_high',
+                'species_mid',
                 'actualagegroup',
                 'planttype'
             ],
@@ -3687,7 +3690,7 @@ class PoductPolygon(FcRow):
             # none of the output stand veg forms appears in organizingVegForm_hierarchy.
             # return empty dict.
             txt = "product stand's %s vegForm does not appear in %s." % (layerToShortText[layerNum], organizingVegForm_hierarchy)
-            self.notifier.add(stepName,'message', txt)
+            self.notifier.add(stepName,'warning', txt)
             return outdict
         
         # get organizing_vegForms's group species codes
@@ -3731,7 +3734,7 @@ class PoductPolygon(FcRow):
             # no species found - return empty dict
             speciesNames = [speciesDict[int(sc)] for sc in speciesCodes_byStand[0] + speciesCodes_byStand[1]]
             txt = "source stands' %s species %s are not under %s." % (layerToShortText[layerNum], speciesNames, organizing_vegForms)
-            self.notifier.add(stepName,'message', txt)
+            self.notifier.add(stepName,'warning', txt)
             return outdict
         elif speciesCount <= 3 or speciesGroupCount == 1:
             # collect species codes, sort by weightedValue and return
