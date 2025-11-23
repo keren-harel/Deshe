@@ -1033,7 +1033,7 @@ class ForestLayer(Layer):
                 layerCover_validValues += [None, '']
                 txt = 'Point %s: %s. Layer cover value (%s) not one of the following: %s.'\
                     % (self.parent.FC.oidFieldName, self.parent.id, key, layerCover_validValues)
-                self.parent.notifier.add(stepName, 'warning', txt)
+                self.parent.notifier.add(stepName,'message', txt)
         else:
             validationConditionsMet += 1
         
@@ -1061,7 +1061,7 @@ class ForestLayer(Layer):
                     key = e.args[0]
                     txt = 'Point %s: %s. Species code value (%s) is not found in: "%s".'\
                         % (self.parent.FC.oidFieldName, self.parent.id, key, speciesDict['__jsonFileName__'])
-                    self.parent.notifier.add(stepName, 'warning', txt)
+                    self.parent.notifier.add(stepName,'message', txt)
                     continue
                 else:
                     #Conditions are met:
@@ -1090,7 +1090,7 @@ class ForestLayer(Layer):
             for splitVal in vegForm_split:
                 if splitVal not in vegForm_possibleValues:
                     txt = 'Veg form value (%s) is invalid.' % splitVal
-                    self.parent.notifier.add(stepName, 'warning', txt)
+                    self.parent.notifier.add(stepName,'message', txt)
 
             #Proceed according to lenght of list:
             if len(vegForm_split) == 0:
@@ -1112,7 +1112,7 @@ class ForestLayer(Layer):
                 vegForm_fieldObj = fieldsDict[fieldsList[0]]
                 txt = 'Veg form field [%s,%s] has more than 2 values: %s. Process continued with the first two vegforms only. Removing other values from table.' \
                     % (vegForm_fieldObj.name, vegForm_fieldObj.alias, vegForm_split)
-                self.parent.notifier.add(stepName, 'warning', txt)
+                self.parent.notifier.add(stepName,'message', txt)
                 #Solve matrix for the first two veg forms:
                 vegForm_split_trimmed = vegForm_split[:2]
                 self.vegForm = forestVegFormCoordinator.solve(vegForm_split_trimmed)
@@ -1440,7 +1440,7 @@ class CovtypeResult:
                 txt = 'Could not find alternative node. Origin code: %s, Destination code: %s.' \
                 % (sourceNode.codedValue, sourceNode.altCode)
                 stepName = 'covtype'
-                self.standPolygon.notifier.add(stepName, 'warning', txt)
+                self.standPolygon.notifier.add(stepName,'message', txt)
             alt_name = alternativeNode_reflection.name
             alt_codedValue = alternativeNode_reflection.codedValue
             #set the singleNode to a NEW one: (not a reflection)
@@ -2059,6 +2059,24 @@ class Notifier:
         self.messagePrefix = "Feature class: %s, %s = %s. " % (self.fcRow.FC.name, self.fcRow.FC.oidFieldName, self.fcRow.id)
         self.prefixSign = "~>"
         self.notifications = []
+        #priority- a special add-on for unite stands,
+        #for priority step names → add a specieal sign and a fixed text.
+        self.priority = {
+            'stepNames': [
+                'totalcoverage',
+                'generaldensity',
+                'layerVegForm_tmira',
+                'layerVegForm_high',
+                'layerVegForm_mid',
+                'species_tmira',
+                'species_high',
+                'species_mid',
+                'actualagegroup',
+                'planttype'
+            ],
+            'specialSign': '$',
+            'fixedText': 'fix original stand and re-run unite stands'
+        }
 
     def __repr__(self):
         notificationsCount = len(self.notifications)
@@ -2066,6 +2084,9 @@ class Notifier:
 
     def add(self, stepName, notificationType, message):
         #Creates a Notification object
+        priority = stepName in self.priority['stepNames']
+        if priority and notificationType == 'warning':
+            message = ' '.join([message, self.priority['specialSign'], self.priority['fixedText']])
         notification = Notification(stepName, notificationType, message)
         self.notifications.append(notification)
         txt = self.messagePrefix + "\n\t%s[%s]: %s" % (self.prefixSign, notification.stepName, notification.message)
@@ -2567,7 +2588,7 @@ class UniteLine(FcRow):
         # 1 - the endpoints of the line are within 2 stands:
         if len(self.stands) != 2:
             txt = "line does not start or end within 2 stands."
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             # The next conditions require 2 polygons,
             # so 'return' (break) is appropriate.
             return False
@@ -2576,7 +2597,7 @@ class UniteLine(FcRow):
         helka_numbers = [stand.getSelfData(50003) for stand in self.stands]
         if len(removeDup(helka_numbers)) != 1:
             txt = "polygons are not in the same helka."
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             result = False
 
         # 3 - stands objectid has not been used for other union:
@@ -2587,20 +2608,28 @@ class UniteLine(FcRow):
                 if stand_id in calculated_standIDs:
                     # stand was already been used for another unite line:
                     txt = "stand (id - %s) was used for another unite line (line id - %s)." % (stand_id, joint.id)
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     result = False
 
-        # 4 - stands geometry relation is TOUCHING
+        # 4 - stands geometry relation is TOUCHING:
         stand_shapes = [s.getSelfData(50001) for s in self.stands]
         spatial_relation = get_spatialRelation(stand_shapes)
         spatial_relation_txt = ','.join(spatial_relation)
         self.writeSelf(60004, spatial_relation_txt)
         if "Touches" not in spatial_relation:
             txt = "polygons are not touching. Instead they are: %s." % spatial_relation
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             #for now this condition DOES NOT DISQUALITY a joint.
             #result = False
         
+        # 5 - every stand must have at least 1 sekerpoint:
+        for stand in self.stands:
+            sekerpoints = stand.getRelatedData('sp', 40013)
+            if len(sekerpoints) == 0:
+                txt = "stand (id - %s) does not have sekerpoints." % stand.id
+                self.notifier.add(stepName,'message', txt)
+                result = False
+
         return result
     
 class StandPolygon(FcRow):
@@ -2682,7 +2711,7 @@ class StandPolygon(FcRow):
         except KeyError:
             txt = "StandPolygon object does not have data of field code - %s. \
 Make sure it appears in 'acquireData' method" % fieldCode
-            self.notifier.add(stepName, 'error', txt)
+            self.notifier.add(stepName,'error', txt)
             return None
 
     def getRelatedData(self, nickname, fieldCodes):
@@ -2717,7 +2746,7 @@ Make sure it appears in 'acquireData' method" % fieldCode
             return result
         except:
             txt = "error during getRelatedData method, check code."
-            self.notifier.add(stepName, 'error', txt)
+            self.notifier.add(stepName,'error', txt)
             return None
 
 class PoductPolygon(FcRow):
@@ -2738,7 +2767,7 @@ class PoductPolygon(FcRow):
         # Notify area dominance
         if self.areaDominance:
             txt = "area proportion >= 80%."
-            self.notifier.add(stepName, 'message', txt)
+            self.notifier.add(stepName,'message', txt)
 
         # Set polygon's shape
         self.shape = self.constructGeometry()
@@ -3201,13 +3230,13 @@ class PoductPolygon(FcRow):
         for inputValue in inputValues:
             if inputValue is None:
                 txt = "input value is None."
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'warning', txt)
                 return None
             elif inputValue not in domainValues:
                 # value is entirely not from domain AND is not None.
                 # notify and return None
                 txt = "input value is not from domain: %s" % inputValue
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'warning', txt)
                 return None
             else:
                 # values are valid, continue to logic.
@@ -3264,7 +3293,7 @@ class PoductPolygon(FcRow):
         if matrix_solution['errorMessage']:
             #That means something went wrong and a warning should be raised.
             txt = matrix_solution['errorMessage']
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
         
         return matrix_solution['value']
 
@@ -3304,7 +3333,7 @@ class PoductPolygon(FcRow):
         validValues_sum = sum([t[1] in domainValues[2:] for t in matrix])
         if validValues_sum == 0:
             txt = "both source values are invalid."
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'warning', txt)
             return None
         elif validValues_sum == 1:
             # is the invalid value not from domainValues[:2]?
@@ -3318,7 +3347,7 @@ class PoductPolygon(FcRow):
                 # the invalid value is not from the domain at all.
                 invalidValue = [t[1] for t in matrix if t[1] not in domainValues[:2]][0]
                 txt = "source value (%s) is not from domain." % invalidValue
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'warning', txt)
                 return None
 
         # LOGIC:
@@ -3335,7 +3364,7 @@ class PoductPolygon(FcRow):
         if result in domainValues[:2] + [None]:
             # notify and return
             txt = "returns - %s" % result
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'warning', txt)
         return result
 
     def c__start_year(self):
@@ -3356,7 +3385,7 @@ class PoductPolygon(FcRow):
             # both values are invalid,
             # notify and return None.
             txt = "both of the values of source polygons are not a number."
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             return None
         elif len(validValues) == 1:
             # only one value is valid, return it.
@@ -3390,7 +3419,7 @@ class PoductPolygon(FcRow):
             # notify and return None
             isOrAre = ['is', 'are'][validValues_sum-1]
             txt = "%s of the values of source polygons %s not a number." % (validValues_sum, isOrAre)
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             return None
 
         # LOGIC:
@@ -3508,7 +3537,7 @@ class PoductPolygon(FcRow):
             elif rawValue not in domainValues:
                 # notify and skip tuple
                 txt = 'invalid value %s.' % rawValue
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
             else:
                 # rawValue is from domainValues
                 tup = (proportion, rawValue)
@@ -3599,7 +3628,7 @@ class PoductPolygon(FcRow):
                     vegForms.append(vegForm_split)
                 else:
                     txt = 'invalid vegForm value "%s".' % vegForm_split
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
         else:
             # vegForm is not anything to work with - return empty dict.
             return outdict
@@ -3629,7 +3658,7 @@ class PoductPolygon(FcRow):
                             # notify that species code is not found in species JSON:
                             txt = 'Species code value (%s) is not found in: "%s".'\
                             % (speciesCode, speciesDict['__jsonFileName__'])
-                            self.notifier.add(stepName, 'warning', txt)
+                            self.notifier.add(stepName,'message', txt)
             speciesCodes_byStand.append(stand_speciesCodes)
         # at this point at least one species must be found in both stands:
         if not speciesCodes_byStand[0] and not speciesCodes_byStand[1]:
@@ -3638,6 +3667,8 @@ class PoductPolygon(FcRow):
         
 
         # LOGIC:
+        # at this point speciesCodes_byStand lists are not empty.
+
         # area dominance, and the dominant stand has species codes
         if self.areaDominance and speciesCodes_byStand[0]:
             speciesCodes = speciesCodes_byStand[0]
@@ -3666,6 +3697,8 @@ class PoductPolygon(FcRow):
         if not organizing_vegForms:
             # none of the output stand veg forms appears in organizingVegForm_hierarchy.
             # return empty dict.
+            txt = "product stand's %s vegForm does not appear in %s." % (layerToShortText[layerNum], organizingVegForm_hierarchy)
+            self.notifier.add(stepName,'warning', txt)
             return outdict
         
         # get organizing_vegForms's group species codes
@@ -3707,6 +3740,9 @@ class PoductPolygon(FcRow):
 
         if speciesCount == 0:
             # no species found - return empty dict
+            speciesNames = [speciesDict[int(sc)] for sc in speciesCodes_byStand[0] + speciesCodes_byStand[1]]
+            txt = "source stands' %s species %s are not under %s." % (layerToShortText[layerNum], speciesNames, organizing_vegForms)
+            self.notifier.add(stepName,'warning', txt)
             return outdict
         elif speciesCount <= 3 or speciesGroupCount == 1:
             # collect species codes, sort by weightedValue and return
@@ -3781,7 +3817,7 @@ class PoductPolygon(FcRow):
             elif raw_value is not None:
                 fieldAlias = fieldsDict[fieldCode].alias
                 txt = 'invalid value (%s) in field "%s".' % (raw_value, fieldAlias)
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'warning',txt)
 
         # LOGIC:
         weighted_value = sum([proportion*layerCover_table1[category][1] for proportion, category in matrix])
@@ -3820,7 +3856,7 @@ class PoductPolygon(FcRow):
                     elif split_value is not None:
                         fieldAlias = fieldsDict[fieldCode].alias
                         txt = 'invalid value (%s) in field "%s".' % (split_value, fieldAlias)
-                        self.notifier.add(stepName, 'warning', txt)
+                        self.notifier.add(stepName,'message', txt)
         
         # LOGIC:
         if valid_values:
@@ -3883,7 +3919,7 @@ class PoductPolygon(FcRow):
             else:
                 #category is not valid nor none → notify as warning.
                 txt = "Invalid value insource polygon field '%s': %s." % (fieldName, category)
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
         
         # LOGIC:
         if validMediansToProportion:
@@ -3925,7 +3961,7 @@ class PoductPolygon(FcRow):
         #Notify in case averagesSum > 100:
         if averagesSum>100:
             txt = 'sum of harms averages > 100. Items: %s' % str(treeharmList)
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
         #convert to categoryand return:
         category = toCategory(min(averagesSum, 100), backwardsList)
         return category
@@ -3999,7 +4035,7 @@ class PoductPolygon(FcRow):
                 sourceStandID = self.stands[stand_i].id
                 txt = 'unable to get cover of %s from planttype related table (source stand ID: %s)' \
                     % (planttypeKey, sourceStandID)
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
                 
             # get species list:
             # stand_species = [speciesCode <int>, ...]
@@ -4015,12 +4051,12 @@ class PoductPolygon(FcRow):
                             sourceStandID = self.stands[stand_i].id
                             txt = "Species code %s wasn't found in species list. source stand id: %s." \
                                 % (splitValue, sourceStandID)
-                            self.notifier.add(stepName, 'warning', txt)
+                            self.notifier.add(stepName,'message', txt)
                     else:
                         sourceStandID = self.stands[stand_i].id
                         txt = "Species code %s failed to be turned into an integer. source stand id: %s." \
                             % (splitValue, sourceStandID)
-                        self.notifier.add(stepName, 'warning', txt)
+                        self.notifier.add(stepName,'message', txt)
 
             # append the final tuple: (area, cover)
             areaProportion = matrix_species[stand_i][0]
@@ -4328,7 +4364,7 @@ class PoductPolygon(FcRow):
             elif value is not None:
                 stand_ID = self.stands[i].id
                 txt = 'value (%s) from field (stand id %s) is invalid.' % (value, stand_ID)
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
         
         # LOGIC:
         if validTuples:
@@ -4383,7 +4419,7 @@ class PoductPolygon(FcRow):
             elif raw_value is not None:
                 fieldAlias = fieldsDict[fieldCode].alias
                 txt = 'invalid value (%s) in field "%s".' % (raw_value, fieldAlias)
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
 
         # LOGIC:
         if valid_tuples:
@@ -4434,7 +4470,7 @@ class PoductPolygon(FcRow):
                     invasiveSp_valid = False
                 elif invasiveSp not in domainValues_invasiveSpecies:
                     txt = 'invasive species (%s) does not appear in domain.'
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     invasiveSp_valid = False
 
                 # validate epicenter:
@@ -4442,7 +4478,7 @@ class PoductPolygon(FcRow):
                     epicenter_valid = False
                 elif epicenter not in domainValues_epicenter:
                     txt = 'epicenter (%s) does not appear in domain.'
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     epicenter_valid = False
                 
                 # validate empty tuples:
@@ -4515,13 +4551,13 @@ class PoductPolygon(FcRow):
                     polygon_plantTypeDict[plantType] += int(percent)
                     if int(percent) % 10 != 0:
                         txt = 'percent (%s) of input polygon is not a multiple of 10.' % percent
-                        self.notifier.add(stepName, 'warning', txt)
+                        self.notifier.add(stepName,'warning', txt)
                 except KeyError:
                     txt = 'plant type (%s) of input polygon is invalid.' % plantType
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'warning', txt)
                 except ValueError:
                     txt = 'percent (%s) of input polygon is not convertable to number.' % percent
-                    self.notifier.add(stepName, 'warning', txt)# --- end of validation ---
+                    self.notifier.add(stepName,'warning', txt)# --- end of validation ---
 
             # append the sum of every plant type to plantType_valuesList[plantType]
             for plantType, percent in polygon_plantTypeDict.items():
@@ -4624,12 +4660,12 @@ class PoductPolygon(FcRow):
                 # validation
                 if domTree not in domainValues:
                     txt = 'tree code (%s) of input polygon does not appear in domain.' % domTree
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                 try:
                     weightedValue = int(proportion)*areaProportion*polygon_Generaldensity_median
                 except ValueError:
                     txt = 'percent (%s) of input polygon is not convertable to number.' % proportion
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                 # --- end of validation ---
 
                 if domTree in resultsDict.keys():
@@ -4707,7 +4743,7 @@ class PoductPolygon(FcRow):
                 impact = row_tup[1]
                 if defect not in defects_domainValues:
                     txt = 'invalid value %s - not from domain.' % defect
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     continue
                 elif defect == elseValue:
                     #@ impact == אחר...
@@ -4729,7 +4765,7 @@ class PoductPolygon(FcRow):
                             defectsAndSums[defect] = currentResult
                     else:
                         txt = 'invalid value %s - not from domain.' % impact
-                        self.notifier.add(stepName, 'warning', txt)
+                        self.notifier.add(stepName,'message', txt)
                         continue
         
         # LOGIC:
@@ -4815,7 +4851,7 @@ class PoductPolygon(FcRow):
                     key = e.args[0]
                     txt = 'Unable to turn species code value (%s) into an integer.'\
                         % (key)
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     continue
                 except KeyError as e:
                     #Species code: not found in speciesDict.
@@ -4823,7 +4859,7 @@ class PoductPolygon(FcRow):
                     key = e.args[0]
                     txt = 'Species code value (%s) is not found in: "%s".'\
                         % (key, speciesDict['__jsonFileName__'])
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                     continue
                 else:
                     #Conditions are met:
@@ -5022,7 +5058,7 @@ class PoductPolygon(FcRow):
                     outDict[layerOrder].setVegForm(vegForm)
                     #Add warning:
                     txt = 'sub-forest layer "%s".' % vegForm
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
         
 
         #create layer description string for primary and secondary layers
@@ -5114,7 +5150,7 @@ class PoductPolygon(FcRow):
                 #and then notify:
                 if (resultObj.str is not None) and (resultObj.code is None):
                     txt = "Could not find species code of %s in JSON file." % resultObj.str
-                    self.notifier.add(stepName, 'warning', txt)
+                    self.notifier.add(stepName,'message', txt)
                 #return. that means the logic ends here.
                 return resultObj
         
@@ -5214,7 +5250,7 @@ class PoductPolygon(FcRow):
                 resultObj.assignBroadleaf(broadleafText)
                 warningText = 'Could not find broadleaf type among %s' \
                 % list(vegForms)
-                self.notifier.add(stepName, 'warning', warningText)
+                self.notifier.add(stepName,'message', warningText)
                 return resultObj
             else:
                 return resultObj
@@ -5300,7 +5336,7 @@ class PoductPolygon(FcRow):
                             iterableNodes = root.getNodesWithValue()
                         else:
                             txt = 'Could not locate %s in JSON file.' % str_translated
-                            self.notifier.add(stepName, 'warning', txt)
+                            self.notifier.add(stepName,'message', txt)
 
                         #Substitution finished - stop this for-loop:
                         break
@@ -5311,7 +5347,7 @@ class PoductPolygon(FcRow):
                     txt = "Could not find substitute for '%s' in stand's veg forms of layers tmira \\ high \\ mid." % \
                     iterableNodes[broadleaf_index].name
                     #suspend warning: (development section #5)
-                    #self.notifier.add(stepName, 'warning', txt)
+                    #self.notifier.add(stepName,'message', txt)
 
             if len(iterableNodes) == 1:
                 resultObj.assignNode(iterableNodes[0])
@@ -5502,7 +5538,7 @@ class PoductPolygon(FcRow):
                 vegForm = translate(vegForm, subForestVegForm_translation)
                 #Add warning:
                 txt = 'sub-forest layer "%s".' % vegForm
-                self.notifier.add(stepName, 'warning', txt)
+                self.notifier.add(stepName,'message', txt)
                 return vegForm
 
     def c__pointvarianceindex(self):
@@ -5551,7 +5587,7 @@ class PoductPolygon(FcRow):
             # two origin polygon must include at least two seker points,
             # one for each polygon.
             txt = 'number of sekerpoints in both polygons is <= 1.'
-            self.notifier.add(stepName, 'warning', txt)
+            self.notifier.add(stepName,'message', txt)
             return None
 
         # LOGIC:
@@ -5911,7 +5947,7 @@ calculatedJoints = []
 
 uniteLines_uc = arcpy.UpdateCursor(
     org.unitelines.fullPath,
-    #where_clause = 'OBJECTID IN (1, 2)', #for debug!!!
+    #where_clause = 'OBJECTID IN (41,25,38)', #for debug!!!
     sort_fields = "%s A" % org.unitelines.oidFieldName
     )
 #Main iteration:
