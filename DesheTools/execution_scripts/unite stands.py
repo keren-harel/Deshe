@@ -2611,7 +2611,7 @@ class UniteLine(FcRow):
                     self.notifier.add(stepName,'message', txt)
                     result = False
 
-        # 4 - stands geometry relation is TOUCHING
+        # 4 - stands geometry relation is TOUCHING:
         stand_shapes = [s.getSelfData(50001) for s in self.stands]
         spatial_relation = get_spatialRelation(stand_shapes)
         spatial_relation_txt = ','.join(spatial_relation)
@@ -2622,6 +2622,14 @@ class UniteLine(FcRow):
             #for now this condition DOES NOT DISQUALITY a joint.
             #result = False
         
+        # 5 - every stand must have at least 1 sekerpoint:
+        for stand in self.stands:
+            sekerpoints = stand.getRelatedData('sp', 40013)
+            if len(sekerpoints) == 0:
+                txt = "stand (id - %s) does not have sekerpoints." % stand.id
+                self.notifier.add(stepName,'message', txt)
+                result = False
+
         return result
     
 class StandPolygon(FcRow):
