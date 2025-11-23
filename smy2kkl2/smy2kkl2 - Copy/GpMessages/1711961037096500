@@ -1,3 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 07 דצמבר 2023 10:46:47</msg><msg code="0" type="0">75 features of SDE.SMY_Samples layer deleted</msg><msg code="1" type="100">ERROR 160281: A requested row object could not be located.
-Failed to execute (Append).
-</msg><msg code="1" type="100">&lt;class 'arcgisscripting.ExecuteError'&gt; smyAppend2SDE_param.py 84</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום חמישי 07 דצמבר 2023 10:47:25 (Elapsed Time: 37.33 seconds)</msg></messages>

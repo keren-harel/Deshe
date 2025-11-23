@@ -1,3 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום שלישי 23 ינואר 2024 16:38:15</msg><msg code="1" type="100">ERROR 160082: Failed to delete related part objects for composite object
-Failed to execute (DeleteFeatures).
-</msg><msg code="1" type="100">&lt;class 'arcgisscripting.ExecuteError'&gt; smyAppend2SDE_param.py 103</msg><msg code="0" type="0">Failed script 3. Append SMY to SDE...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום שלישי 23 ינואר 2024 16:41:10 (Elapsed Time: 2 minutes 54 seconds)</msg></messages>

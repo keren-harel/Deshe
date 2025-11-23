@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?><messages><msg code="0" type="2">Start Time: יום חמישי 07 דצמבר 2023 10:30:48</msg><msg code="0" type="0">75 features of SDE.SMY_Samples layer deleted</msg><msg code="0" type="0">42 features of SDE.SMY_Stands layer deleted</msg><msg code="1" type="100">Failed to execute. Parameters are not valid.
+ERROR 000732: Target Dataset: Dataset C:\MDGISS\devs\smy2kkl\kkl-db1_giscentral_kkl1.sde\SDE.SMY_Samples does not exist or is not supported
+Failed to execute (Append).
+</msg><msg code="1" type="100">&lt;class 'arcgisscripting.ExecuteError'&gt; smyAppend2SDE_param.py 84</msg><msg code="0" type="0">Failed script (null)...</msg><msg code="-2147467259" type="100">Failed to execute (Append2SDE).</msg><msg code="0" type="3">Failed at יום חמישי 07 דצמבר 2023 10:32:56 (Elapsed Time: 2 minutes 7 seconds)</msg></messages>
