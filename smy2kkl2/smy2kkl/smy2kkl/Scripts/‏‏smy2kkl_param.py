@@ -36,7 +36,7 @@ def update_codes(code_string):
         
         code_list = code_string.split(',')
         for code in code_list:
-            if code != '':
+            if code.isdigit():
                 if int(code) in c50k_dic:
                     new_list.append(str(c50k_dic[int(code)]))
                 else:
@@ -131,7 +131,7 @@ def convert_data(out_gdb, in_tab, domains_df, tab_design_df, c50k_dic, converted
                 if not fld in ['FOR_NO', 'HELKA', 'STAND_NO', 'START_YEAR']:                    
                     tab_df['xxx'] = np.where(tab_df['xxx'] > 50000, tab_df['xxx'].map(c50k_dic), tab_df['xxx'])
                 tab_df[fld] = tab_df['xxx']
-            elif src_flds_dic[fld][0] == 'TC':
+            elif src_flds_dic[fld][0] == 'TC':                
                 tab_df[fld] = tab_df[fld].apply(update_codes)
                 
 
@@ -199,12 +199,13 @@ def create_domains(df, gdb):
                     code = row[0]
                     val = row[1]
                     arcpy.management.AddCodedValueToDomain(gdb, domName, code, val)
-
+        return
     except Exception as e:
         exc_type, exc_obj, exc_tb = sys.exc_info()
         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
         arcpy.AddError(e)
         arcpy.AddError(f'{exc_type} {fname} {exc_tb.tb_lineno}')
+        sys.exit()
 
     
 if __name__=='__main__':
@@ -320,6 +321,27 @@ if __name__=='__main__':
                     #arcpy.AddMessage([tabname, fld, outdomain])
 
 
+        # Create a new template file geodatabase
+        if flag_update:
+            arcpy.AddMessage ('##########################################')
+            arcpy.AddMessage (f'# Create a new template file geodatabase')
+            arcpy.AddMessage ('##########################################')            
+            if arcpy.Exists(tmpl_gdb):
+                arcpy.management.Delete(tmpl_gdb)
+                
+            arcpy.management.CreateFileGDB(output_dir, tmpl_gdb_name)
+            arcpy.AddMessage(tmpl_gdb)
+            
+            # Add new domains from data design file
+            arcpy.AddMessage('>>> Create domains...')
+            create_domains(out_domains_df, tmpl_gdb)
+
+            # Create zip file from template file geodatabase
+            zipfile = f'{tmpl_gdb}.zip'
+            if os.path.exists(zipfile):
+                os.remove(zipfile)
+            shutil.make_archive(tmpl_gdb, 'zip', tmpl_gdb)
+
         arcpy.AddMessage ('#########################################################')
         arcpy.AddMessage (f'# CMY Data converting process for forest number {for_no}')
         arcpy.AddMessage ('#########################################################')
@@ -352,20 +374,7 @@ if __name__=='__main__':
                                 ])
         
         if arcpy.Exists(out_gdb):
-            arcpy.management.Delete(out_gdb)
-
-        if flag_update:
-            if arcpy.Exists(out_gdb):
-                arcpy.management.Delete(out_gdb)
-                
-            arcpy.management.CreateFileGDB(output_dir, tmpl_gdb_name)
-            
-            # Add new domains from data design file
-            arcpy.AddMessage('>>> Create domains...')
-            create_domains(out_domains_df, out_gdb)
-            
-            shutil.make_archive(tmpl_gdb, 'zip', tmpl_gdb)
-            
+            arcpy.management.Delete(out_gdb)            
 
         # Unzip and rename template of file gdb
         
@@ -459,6 +468,7 @@ if __name__=='__main__':
         curr_domains = [ d.name for d in arcpy.da.ListDomains(out_gdb)]
         for d in curr_domains:
             if d in old_domains:
+                arcpy.AddMessage(d)
                 arcpy.management.DeleteDomain(out_gdb, d)
 
         # Assign domains to fields
