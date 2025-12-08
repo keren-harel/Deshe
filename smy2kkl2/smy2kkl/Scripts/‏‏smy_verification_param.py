@@ -303,16 +303,9 @@ if __name__=='__main__':
                                 if value in values:
                                     values[value].append(oid)
                                 else:
-                                    values[value]=[oid]
-##                            elif value == '':                            
-##                                value = 'EMPTY'
-##                                if value in values:                            
-##                                    values[value].append(oid)
-##                                else:
-##                                    values[value]=[oid]                            
-                                
+                                    values[value]=[oid]                                
                 else:
-                     arcpy.AddWarning(f'\tThe field {fld_name} does not exist in {ds}')
+                    arcpy.AddWarning(f'\tThe field {fld_name} does not exist in {ds}')
                                 
                 for v in values:
                     l = [ds, len(values[v]), fld_name, v, domain_name]
