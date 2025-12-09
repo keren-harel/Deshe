@@ -1181,7 +1181,7 @@ class SekerPoint(FcRow):
         #0)STAND TYPE:
         try:
             standtype = self.getSelfValue(40125)
-        except KeyError:
+        except:
             # default if field not found.
             # probably the sekerpoint is taken with an older version that doesn't
             # include standtype version.
