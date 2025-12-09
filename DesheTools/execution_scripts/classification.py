@@ -13,8 +13,8 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.2.2025 - unite stands\smy_survey_Alonim_BKP_270724.gdb'
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Alonim')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.12.09 - new form\b44cdcc4-c6f0-4950-b98b-2228b25cbaf6.gdb'
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_2026_forDedi')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "צחיח-למחצה" #ים-תיכוני
@@ -1178,6 +1178,27 @@ class SekerPoint(FcRow):
         The following attributes with the prefix "v__" for VALUE of calculations.
         The rest of the name, after the prefix, after the field name.
         """
+        #0)STAND TYPE:
+        try:
+            standtype = self.getSelfValue(40125)
+        except KeyError:
+            # default if field not found.
+            # probably the sekerpoint is taken with an older version that doesn't
+            # include standtype version.
+            standtype = None
+        
+        if standtype in ['3','4']:
+            speciesComposition_dict = {
+                '3': 'חקלאות',
+                '4': 'שטח מבונה'
+            }
+            self.writeSelf(
+                [40111, 40024, 40034, 40044, 40104],
+                [speciesComposition_dict[standtype]] + ['לא יער']*4
+            )
+            # method ends here for stand types 3 and 4.
+            return
+
         #1+2)LOGIC LAYERS:
         self.v__logiclayers = self.c__logiclayers()
         oedered_fieldCodes = {
