@@ -3236,9 +3236,9 @@ class Matrix3DCoordinator:
             },
             {
                 'name': 'relativeDensity',
-                'source': fieldsDict[50044].name,
-                'domain': fieldsDict[50044].domain,
-                'domainValues': listCodedValues(org.sekerpoints.workspace, fieldsDict[50044].domain)
+                'source': fieldsDict[40116].name,
+                'domain': fieldsDict[40116].domain,
+                'domainValues': listCodedValues(org.sekerpoints.workspace, fieldsDict[40116].domain)
             },
         ]
 
