@@ -1138,7 +1138,8 @@ class FcRow:
             where_clause = sqlQuery,
             )
         for rel_Row in rel_Uc:
-            print(rel_Row[0]) #INDICATE
+            #print(rel_Row[0]) #INDICATE
+            #print(sqlQuery) #INDICATE
             rel_Uc.deleteRow()
         del rel_Uc
 
@@ -2191,12 +2192,9 @@ class SekerPoint(FcRow):
     def validateRelatedRows(self):
         """
         Validate point's 4 related tables for:
-        1) Duplications, 
-        2) Missing values (null).
-        
-        Two fields in every table:
-        1st - checked for duplications AND missing values.
-        2nd - checked for missing values only.
+        1) Duplications [all 4 tables], 
+        2) Null in any value [tables: pt2, pt3],
+        3) Null / 'en' in title field or value field [tables: pt1, pt4].
         """
         stepName = 'validateRelatedRows'
 
@@ -2207,31 +2205,59 @@ class SekerPoint(FcRow):
 
         # first field - checked for duplicaions AND missing values
         # second field - checked for missing values.
-        #(relation nickname, field1, field2)
+        #(relation nickname, field1, field2, field_id)
         fields = [
-            ('pt1', 41002, 41003),
-            ('pt2', 42002, 42003),
-            ('pt3', 43005, 43006),
-            ('pt4', 44002, 44003)
+            ('pt1', 41002, 41003, 41001),
+            ('pt2', 42002, 42003, 42001),
+            ('pt3', 43005, 43006, 43001),
+            ('pt4', 44002, 44003, 44001)
         ]
 
-        for nickname, field1, field2 in fields:
-            rawData = self.getRelatedValues(nickname, [field1, field2])
+        en = 'אין'
+        null_values = [None, en]
+
+        for nickname, field1, field2, field_id in fields:
+            rawData = self.getRelatedValues(nickname, [field1, field2, field_id])
             values_1 = [r[0] for r in rawData]
             values_2 = [r[1] for r in rawData]
-            tableName = org.relationships[nickname].destination.name
-            # Duplications - first field:
+            relationship = org.relationships[nickname].destination
+            tableName = relationship.name
+            # 1) Duplications - first field:
             duplications_found = len(values_1) - len(removeDup(values_1)) != 0
             if duplications_found:
                 txt = f"{warning_messages[0]} {tableName}"
                 self.notifier.add(stepName, 'warning', txt)
-            # Missing values - both fields:
-            missing_found = None in values_1 + values_2
-            if missing_found:
-                txt = f"{warning_messages[1]} {tableName}"
-                self.notifier.add(stepName, 'warning', txt)
-
-
+            # 2) Null in any value - both fields:
+            if nickname in ['pt2', 'pt3']:
+                missing_found = None in values_1 + values_2
+                if missing_found:
+                    txt = f"{warning_messages[1]} {tableName}"
+                    self.notifier.add(stepName, 'warning', txt)
+            # 3) Null / 'en' in title field or value field:
+            elif nickname in ['pt1', 'pt4']:
+                for v1, v2, v_id in rawData:
+                    # 3.1) in both fields:
+                    if v1 in null_values and v2 in null_values:
+                        # delete without notifying:
+                        sql_exp = buildSqlQuery(
+                            relationship.fullPath,
+                            fieldsDict[field_id].name,
+                            v_id
+                        )
+                        self.deleteRelated(nickname, sql_exp)
+                    # 3.2) in title field only:
+                    elif v1 in null_values:
+                        # delete without notifying:
+                        sql_exp = buildSqlQuery(
+                            relationship.fullPath,
+                            fieldsDict[field_id].name,
+                            v1
+                        )
+                        self.deleteRelated(nickname, sql_exp)
+                    # 3.3) in value field only:
+                    elif v2 in null_values:
+                        txt = f"{tableName} - Missing value in field {fieldsDict[field2].alias}."
+                        self.notifier.add(stepName, 'warning', txt)
         return
 
     def importSpecies(self):
