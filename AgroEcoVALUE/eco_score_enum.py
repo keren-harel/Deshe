@@ -19,3 +19,9 @@ class FloodplainScore(Enum):
     MEDIUM = 8    # Parcel is within max_distance from floodplain
     LOW = 0       # Parcel is farther than max_distance from floodplain
 
+class NaturalArea_type(Enum):
+    """
+    סוג שטח טבעי
+    """
+    OPEN = ("פתוח", "מוגן")
+    AGRICULTURAL = ("חקלאי", "")
