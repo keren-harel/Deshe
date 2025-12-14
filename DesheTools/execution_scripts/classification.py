@@ -1981,6 +1981,8 @@ class SekerPoint(FcRow):
         #Remove None from harmsList:
         while None in harmsList:
             harmsList.remove(None)
+        #Remove any value that is not in domainValues.keys():
+        harmsList = [item for item in harmsList if item in domainValues.keys()]
         #convert category to ceil of avg:
         averagesList = [domainValues[category][0] for category in harmsList]
         #Sum. if len(averagesList) == 0: sum = 0.
