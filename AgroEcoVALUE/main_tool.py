@@ -110,6 +110,11 @@ except Exception as e:
 # Calculate Natural Area score
 arcpy.AddMessage("Now calculating Natural Area scores...")
 try:
+    # Dictionary to store the maximum score for each parcel OID
+    parcel_max_scores = {}
+    # Dictionary to count how many units each parcel overlaps
+    parcel_unit_count = {}
+    
     with arcpy.da.SearchCursor(landscape_units_layer, ["SHAPE@"]) as eco_cursor:
         for eco_geom in eco_cursor:
             # Accumulate areas for this landscape unit
@@ -122,23 +127,34 @@ try:
                         if re.search(NaturalArea_type.OPEN.value[1], landcov) or re.search(NaturalArea_type.OPEN.value[0], landcov): 
                             sum_open_area += geom.area
                         sum_total_area += geom.area
-            # Now, if total_area > 0, calculate ratio and update parcels
+            # Now, if total_area > 0, calculate ratio and score for this unit
             if sum_total_area > 0:
                 ratio = sum_open_area / sum_total_area
                 if ratio < 0.2:
-                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
-                    score = NaturalAreaScore.LOW.value
+                    unit_score = NaturalAreaScore.LOW.value
                 elif 0.2 <= ratio < 0.8:
-                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
-                    score = NaturalAreaScore.MEDIUM.value
+                    unit_score = NaturalAreaScore.MEDIUM.value
                 elif ratio >= 0.8:
-                    score = NaturalAreaScore.MAXIMUM.value
-                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
-                # Update all parcels in this unit with the score
-                with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", NaturalArea_score_field, "LandCov"]) as parcel_cursor:
-                    for oid, geom, current_score, landcov in parcel_cursor:
+                    unit_score = NaturalAreaScore.MAXIMUM.value
+                
+                # Update max score for parcels in this unit
+                with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "SHAPE@"]) as parcel_cursor:
+                    for oid, geom in parcel_cursor:
                         if geom.overlaps(eco_geom[0]) or geom.within(eco_geom[0]) or eco_geom[0].within(geom):
-                            parcel_cursor.updateRow([oid, geom, score, landcov])
+                            if oid not in parcel_max_scores:
+                                parcel_max_scores[oid] = unit_score
+                            else:
+                                parcel_max_scores[oid] = max(parcel_max_scores[oid], unit_score)
+                            parcel_unit_count[oid] = parcel_unit_count.get(oid, 0) + 1
+    
+    # Now update all parcels with their maximum score
+    with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", NaturalArea_score_field]) as parcel_cursor:
+        for oid, current_score in parcel_cursor:
+            if oid in parcel_max_scores:
+                new_score = parcel_max_scores[oid]
+                parcel_cursor.updateRow([oid, new_score])
+                if parcel_unit_count.get(oid, 0) > 1:
+                    add_warning(oid, f"Parcel overlaps {parcel_unit_count.get(oid, 0)} units with different scores, the higher score was entered.")
 
     arcpy.AddMessage(f"Natural Area scores saved in '{NaturalArea_score_field}'.")
 except Exception as e:
