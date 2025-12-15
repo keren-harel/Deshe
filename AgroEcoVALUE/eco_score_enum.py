@@ -8,7 +8,7 @@ class CorridorScore(Enum):
     """
     CORE = (15, "ליבה", "שמורת טבע/גן לאומי/יער קקל")
     TRANSITION = (10, "מעבר", "מעבר הכרחי - צוואר בקבוק")
-    CORRIDOR = (5, "מסדרון", "מדרון אקולוגי ארצי/אזורי")
+    CORRIDOR = (5, "מסדרון", "מסדרון אקולוגי ארצי/אזורי")
     NONE = (0, "אין חפיפה", "מחוץ למסדרון אקולוגי ארצי/אזורי")
 
 class FloodplainScore(Enum):
@@ -25,3 +25,11 @@ class NaturalArea_type(Enum):
     """
     OPEN = ("פתוח", "מוגן")
     AGRICULTURAL = ("חקלאי", "")
+
+class NaturalAreaScore(Enum):
+    """
+    ציון שטח טבעי
+    """
+    MAXIMUM = 15
+    MEDIUM = 8
+    LOW = 0 

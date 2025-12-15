@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import arcpy
 import re
-from eco_score_enum import CorridorScore, FloodplainScore, NaturalArea_type
+from eco_score_enum import CorridorScore, FloodplainScore, NaturalArea_type, NaturalAreaScore
 
 # Get layers to process
 agricultural_layer = arcpy.GetParameterAsText(0)  # Agricultural parcels layer
@@ -13,7 +13,7 @@ landscape_units_layer = arcpy.GetParameterAsText(7)  # Landscape Units layer
 # Get fields to store scores 
 corridor_score_field = arcpy.GetParameterAsText(3)  # Field for corridor score
 floodplain_score_field = arcpy.GetParameterAsText(4) # Field for floodplain score
-NaturalArea_score_field = arcpy.GetParameterAsText(6)    # Field for Land Cover score
+NaturalArea_score_field = arcpy.GetParameterAsText(6)    # Field for Natural Area score
 
 # Get other values from user  
 max_distance = float(arcpy.GetParameterAsText(5))    # Max distance (e.g., 500)
@@ -39,6 +39,7 @@ if 'WARNING' not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
     arcpy.AddField_management(agricultural_layer, 'WARNING', 'TEXT', field_length=2000)
 
 # Calculate corridor score
+arcpy.AddMessage("Now calculating corridor scores...")
 try:
     with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", corridor_score_field]) as parcel_cursor:
         for oid, geom, current_score in parcel_cursor:
@@ -59,6 +60,7 @@ except Exception as e:
     arcpy.AddError(f"Failed to calculate corridor scores: {e}")
 
 # Calculate floodplain score
+arcpy.AddMessage("Now calculating floodplain scores...")
 try:
     overlap_threshold = 0.2  # 20% overlap threshold
     
@@ -105,22 +107,46 @@ try:
 except Exception as e:
     arcpy.AddError(f"Error calculating floodplain scores: {e}")
 
-
-# Calculate Natural Area score 
+# Calculate Natural Area score
+arcpy.AddMessage("Now calculating Natural Area scores...")
 try:
     with arcpy.da.SearchCursor(landscape_units_layer, ["SHAPE@"]) as eco_cursor:
         for eco_geom in eco_cursor:
-            # Open an update cursor on parcels and update only those that are contained/overlap with the current ECO geometry
+            # Accumulate areas for this landscape unit
+            sum_open_area = 0.0
+            sum_total_area = 0.0
             with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", NaturalArea_score_field, "LandCov"]) as parcel_cursor:
                 for oid, geom, current_score, landcov in parcel_cursor:
                     if geom.overlaps(eco_geom[0]) or geom.within(eco_geom[0]) or eco_geom[0].within(geom):
-                        print(f"Processing parcel OID {oid} with LandCov '{landcov}'")
-                    else:
-                        continue  # Skip parcels that do not overlap or are not contained
+                        # Accumulate based on landcov
+                        if re.search(NaturalArea_type.OPEN.value[1], landcov) or re.search(NaturalArea_type.OPEN.value[0], landcov): 
+                            sum_open_area += geom.area
+                        sum_total_area += geom.area
+            # Now, if total_area > 0, calculate ratio and update parcels
+            if sum_total_area > 0:
+                ratio = sum_open_area / sum_total_area
+                if ratio < 0.2:
+                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
+                    score = NaturalAreaScore.LOW.value
+                elif 0.2 <= ratio < 0.8:
+                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
+                    score = NaturalAreaScore.MEDIUM.value
+                elif ratio >= 0.8:
+                    score = NaturalAreaScore.MAXIMUM.value
+                    add_warning(oid, f"NaturalAreaScore: {ratio:.2%} open area ratio")
+                # Update all parcels in this unit with the score
+                with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", NaturalArea_score_field, "LandCov"]) as parcel_cursor:
+                    for oid, geom, current_score, landcov in parcel_cursor:
+                        if geom.overlaps(eco_geom[0]) or geom.within(eco_geom[0]) or eco_geom[0].within(geom):
+                            parcel_cursor.updateRow([oid, geom, score, landcov])
+
+    arcpy.AddMessage(f"Natural Area scores saved in '{NaturalArea_score_field}'.")
 except Exception as e:
     arcpy.AddError(f"Error calculating Natural Area scores: {e}")
 
+
 # After processing, write collected warnings into the WARNING field per OID
+arcpy.AddMessage("Now writing warnings to WARNING field...")
 try:
     if warnings_by_oid:
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "WARNING"]) as warn_cursor:
