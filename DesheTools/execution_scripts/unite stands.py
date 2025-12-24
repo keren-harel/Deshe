@@ -3324,48 +3324,36 @@ class PoductPolygon(FcRow):
             "ותיק (76-90)",
             "ותיק (91-105)"
         ]
+        domainValues_generaldensity = [
+            'לא רלוונטי',
+            'אין עצים',
+            '1-10',
+            '11-20',
+            '21-40',
+            '41-60',
+            '61-100',
+            'מעל  100'
+        ]
+        defaultValue = domainValues[0]
         matrix = self.getMatrix_self(50045)
         #general density of the larger polygon:
         generalDensity_0 = self.stands[0].getSelfData(50042)
 
-        # VALIDATION:
-        # valid only if both values are from domainValues[2:]
-        validValues_sum = sum([t[1] in domainValues[2:] for t in matrix])
-        if validValues_sum == 0:
-            txt = "both source values are invalid."
-            self.notifier.add(stepName,'warning', txt)
-            return None
-        elif validValues_sum == 1:
-            # is the invalid value not from domainValues[:2]?
-            invalidFromFirstTwo = sum([t[1] in domainValues[:2] for t in matrix]) > 0
-            if invalidFromFirstTwo:
-                # continue to logic with one value of domainValues[2:].
-                # pay attention: the return value might be one of these two,
-                # in that case, notify AFTER the logic.
-                pass
-            else:
-                # the invalid value is not from the domain at all.
-                invalidValue = [t[1] for t in matrix if t[1] not in domainValues[:2]][0]
-                txt = "source value (%s) is not from domain." % invalidValue
-                self.notifier.add(stepName,'warning', txt)
-                return None
-
         # LOGIC:
-        result = None
         if self.areaDominance:
-            result = matrix[0][1]
-        elif generalDensity_0 in domainValues[:2]:
-            result = matrix[1][1]
+            return matrix[0][1]
+        elif generalDensity_0 in domainValues_generaldensity[:2]:
+            return matrix[1][1]
         else:
-            seniorIndex = max([domainValues.index(t[1]) for t in matrix])
-            result = domainValues[seniorIndex]
-        
-        # POST-LOGIC VALIDATION:
-        if result in domainValues[:2] + [None]:
-            # notify and return
-            txt = "returns - %s" % result
-            self.notifier.add(stepName,'warning', txt)
-        return result
+            numerableValues_indexes = [domainValues.index(t[1]) for t in matrix if t[1] in domainValues[2:]]
+            if len(numerableValues_indexes) == 2:
+                seniorIndex = max(numerableValues_indexes)
+                return domainValues[seniorIndex]
+            elif len(numerableValues_indexes) == 1:
+                # return the only numerable value
+                return domainValues[numerableValues_indexes[0]]
+            else:
+                return defaultValue
 
     def c__start_year(self):
         """
@@ -3600,7 +3588,6 @@ class PoductPolygon(FcRow):
         """
         vegForm_validValues = {
             'מחטני': '1000',
-            'חורש': '3900',
             'רחבי-עלים': '2900',
             'בוסתנים ומטעים': '2990',
             'שיטים': '2200',
@@ -3619,11 +3606,21 @@ class PoductPolygon(FcRow):
             'שיטים פולשני'
         ]
 
+        # convert specific veg forms for logic:
+        interchangeable_vegForms = {
+            #input veg form : output veg form
+            'חורש': 'רחבי-עלים'
+        }
+
         # VALIDATION:
         # vegForm must be from valid values:
         if hasattr(vegForm,'split') and vegForm != '':
             vegForms = []
             for vegForm_split in vegForm.split(','):
+                # hande interchangeable veg forms:
+                if vegForm_split in interchangeable_vegForms.keys():
+                    vegForm_split = interchangeable_vegForms[vegForm_split]
+                
                 if vegForm_split in vegForm_validValues.keys():
                     vegForms.append(vegForm_split)
                 else:
