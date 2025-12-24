@@ -13,8 +13,8 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\8.2.2025 - unite stands\smy_survey_Alonim_BKP_270724.gdb'
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Alonim')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.12.09 - new form\b44cdcc4-c6f0-4950-b98b-2228b25cbaf6.gdb'
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_2026_forDedi')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "צחיח-למחצה" #ים-תיכוני
@@ -1138,7 +1138,8 @@ class FcRow:
             where_clause = sqlQuery,
             )
         for rel_Row in rel_Uc:
-            print(rel_Row[0]) #INDICATE
+            #print(rel_Row[0]) #INDICATE
+            #print(sqlQuery) #INDICATE
             rel_Uc.deleteRow()
         del rel_Uc
 
@@ -1151,8 +1152,19 @@ class SekerPoint(FcRow):
         # DEPRECATED (validation of related row's creation time)
         #self.validateTimeDuplications()
 
-        self.importSpecies()
-        self.planttype = self.importPlantType()
+        #stand type:
+        try:
+            self.standtype = self.getSelfValue(40125)
+        except:
+            # default if field not found.
+            # probably the sekerpoint is taken with an older version that doesn't
+            # include standtype version.
+            self.standtype = None
+
+        
+        if self.standtype not in ['3','4']:
+            self.importSpecies()
+            self.planttype = self.importPlantType()
 
         #Construct layers
         self.layers = {
@@ -1178,6 +1190,20 @@ class SekerPoint(FcRow):
         The following attributes with the prefix "v__" for VALUE of calculations.
         The rest of the name, after the prefix, after the field name.
         """
+        
+        #0)SPECIAL CASE - STAND TYPES 3 AND 4:
+        if self.standtype in ['3','4']:
+            speciesComposition_dict = {
+                '3': 'חקלאות',
+                '4': 'שטח מבונה'
+            }
+            self.writeSelf(
+                [40111, 40110, 40024, 40034, 40044, 40104],
+                [speciesComposition_dict[self.standtype]] + ['לא יער']*5
+            )
+            # method ends here for stand types 3 and 4.
+            return
+
         #1+2)LOGIC LAYERS:
         self.v__logiclayers = self.c__logiclayers()
         oedered_fieldCodes = {
@@ -1959,6 +1985,8 @@ class SekerPoint(FcRow):
         #Remove None from harmsList:
         while None in harmsList:
             harmsList.remove(None)
+        #Remove any value that is not in domainValues.keys():
+        harmsList = [item for item in harmsList if item in domainValues.keys()]
         #convert category to ceil of avg:
         averagesList = [domainValues[category][0] for category in harmsList]
         #Sum. if len(averagesList) == 0: sum = 0.
@@ -2170,12 +2198,9 @@ class SekerPoint(FcRow):
     def validateRelatedRows(self):
         """
         Validate point's 4 related tables for:
-        1) Duplications, 
-        2) Missing values (null).
-        
-        Two fields in every table:
-        1st - checked for duplications AND missing values.
-        2nd - checked for missing values only.
+        1) Duplications [all 4 tables], 
+        2) Null in any value [tables: pt2, pt3],
+        3) Null / 'en' in title field or value field [tables: pt1, pt4].
         """
         stepName = 'validateRelatedRows'
 
@@ -2186,31 +2211,59 @@ class SekerPoint(FcRow):
 
         # first field - checked for duplicaions AND missing values
         # second field - checked for missing values.
-        #(relation nickname, field1, field2)
+        #(relation nickname, field1, field2, field_id)
         fields = [
-            ('pt1', 41002, 41003),
-            ('pt2', 42002, 42003),
-            ('pt3', 43005, 43006),
-            ('pt4', 44002, 44003)
+            ('pt1', 41002, 41003, 41001),
+            ('pt2', 42002, 42003, 42001),
+            ('pt3', 43005, 43006, 43001),
+            ('pt4', 44002, 44003, 44001)
         ]
 
-        for nickname, field1, field2 in fields:
-            rawData = self.getRelatedValues(nickname, [field1, field2])
+        en = 'אין'
+        null_values = [None, en]
+
+        for nickname, field1, field2, field_id in fields:
+            rawData = self.getRelatedValues(nickname, [field1, field2, field_id])
             values_1 = [r[0] for r in rawData]
             values_2 = [r[1] for r in rawData]
-            tableName = org.relationships[nickname].destination.name
-            # Duplications - first field:
+            relationship = org.relationships[nickname].destination
+            tableName = relationship.name
+            # 1) Duplications - first field:
             duplications_found = len(values_1) - len(removeDup(values_1)) != 0
             if duplications_found:
                 txt = f"{warning_messages[0]} {tableName}"
                 self.notifier.add(stepName, 'warning', txt)
-            # Missing values - both fields:
-            missing_found = None in values_1 + values_2
-            if missing_found:
-                txt = f"{warning_messages[1]} {tableName}"
-                self.notifier.add(stepName, 'warning', txt)
-
-
+            # 2) Null in any value - both fields:
+            if nickname in ['pt2', 'pt3']:
+                missing_found = None in values_1 + values_2
+                if missing_found:
+                    txt = f"{warning_messages[1]} {tableName}"
+                    self.notifier.add(stepName, 'warning', txt)
+            # 3) Null / 'en' in title field or value field:
+            elif nickname in ['pt1', 'pt4']:
+                for v1, v2, v_id in rawData:
+                    # 3.1) in both fields:
+                    if v1 in null_values and v2 in null_values:
+                        # delete without notifying:
+                        sql_exp = buildSqlQuery(
+                            relationship.fullPath,
+                            fieldsDict[field_id].name,
+                            v_id
+                        )
+                        self.deleteRelated(nickname, sql_exp)
+                    # 3.2) in title field only:
+                    elif v1 in null_values:
+                        # delete without notifying:
+                        sql_exp = buildSqlQuery(
+                            relationship.fullPath,
+                            fieldsDict[field_id].name,
+                            v1
+                        )
+                        self.deleteRelated(nickname, sql_exp)
+                    # 3.3) in value field only:
+                    elif v2 in null_values:
+                        txt = f"{tableName} - Missing value in field {fieldsDict[field2].alias}."
+                        self.notifier.add(stepName, 'warning', txt)
         return
 
     def importSpecies(self):
@@ -3215,9 +3268,9 @@ class Matrix3DCoordinator:
             },
             {
                 'name': 'relativeDensity',
-                'source': fieldsDict[50044].name,
-                'domain': fieldsDict[50044].domain,
-                'domainValues': listCodedValues(org.sekerpoints.workspace, fieldsDict[50044].domain)
+                'source': fieldsDict[40116].name,
+                'domain': fieldsDict[40116].domain,
+                'domainValues': listCodedValues(org.sekerpoints.workspace, fieldsDict[40116].domain)
             },
         ]
 
