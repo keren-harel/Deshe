@@ -3600,7 +3600,6 @@ class PoductPolygon(FcRow):
         """
         vegForm_validValues = {
             'מחטני': '1000',
-            'חורש': '3900',
             'רחבי-עלים': '2900',
             'בוסתנים ומטעים': '2990',
             'שיטים': '2200',
@@ -3619,11 +3618,21 @@ class PoductPolygon(FcRow):
             'שיטים פולשני'
         ]
 
+        # convert specific veg forms for logic:
+        interchangeable_vegForms = {
+            #input veg form : output veg form
+            'חורש': 'רחבי-עלים'
+        }
+
         # VALIDATION:
         # vegForm must be from valid values:
         if hasattr(vegForm,'split') and vegForm != '':
             vegForms = []
             for vegForm_split in vegForm.split(','):
+                # hande interchangeable veg forms:
+                if vegForm_split in interchangeable_vegForms.keys():
+                    vegForm_split = interchangeable_vegForms[vegForm_split]
+                
                 if vegForm_split in vegForm_validValues.keys():
                     vegForms.append(vegForm_split)
                 else:
