@@ -1152,8 +1152,19 @@ class SekerPoint(FcRow):
         # DEPRECATED (validation of related row's creation time)
         #self.validateTimeDuplications()
 
-        self.importSpecies()
-        self.planttype = self.importPlantType()
+        #stand type:
+        try:
+            self.standtype = self.getSelfValue(40125)
+        except:
+            # default if field not found.
+            # probably the sekerpoint is taken with an older version that doesn't
+            # include standtype version.
+            self.standtype = None
+
+        
+        if self.standtype not in ['3','4']:
+            self.importSpecies()
+            self.planttype = self.importPlantType()
 
         #Construct layers
         self.layers = {
@@ -1179,23 +1190,16 @@ class SekerPoint(FcRow):
         The following attributes with the prefix "v__" for VALUE of calculations.
         The rest of the name, after the prefix, after the field name.
         """
-        #0)STAND TYPE:
-        try:
-            standtype = self.getSelfValue(40125)
-        except:
-            # default if field not found.
-            # probably the sekerpoint is taken with an older version that doesn't
-            # include standtype version.
-            standtype = None
         
-        if standtype in ['3','4']:
+        #0)SPECIAL CASE - STAND TYPES 3 AND 4:
+        if self.standtype in ['3','4']:
             speciesComposition_dict = {
                 '3': 'חקלאות',
                 '4': 'שטח מבונה'
             }
             self.writeSelf(
-                [40111, 40024, 40034, 40044, 40104],
-                [speciesComposition_dict[standtype]] + ['לא יער']*4
+                [40111, 40110, 40024, 40034, 40044, 40104],
+                [speciesComposition_dict[self.standtype]] + ['לא יער']*5
             )
             # method ends here for stand types 3 and 4.
             return
