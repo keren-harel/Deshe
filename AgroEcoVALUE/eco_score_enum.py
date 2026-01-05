@@ -19,7 +19,7 @@ class FloodplainScore(Enum):
     MEDIUM = 8    # Parcel is within max_distance from floodplain
     LOW = 0       # Parcel is farther than max_distance from floodplain
 
-class NaturalArea_type(Enum):
+class NaturalAreaType(Enum):
     """
     סוג שטח טבעי
     """
@@ -33,3 +33,19 @@ class NaturalAreaScore(Enum):
     MAXIMUM = 15
     MEDIUM = 8
     LOW = 0 
+
+class OpenSpaceCorridorType(Enum):
+    """
+    סיווג רצף שטחים פתוחים
+    """
+    CORE = (4, 5)           # ערכיות רצף גבוהה מאוד-מירבית
+    BUFFER = (2, 3)         # ערכיות רצף בינונית-גבוהה
+    DISTURBANCE = (0, 1)    # ערכיות רצף נמוכה
+
+class OpenSpaceCorridorScore(Enum):
+    """
+    ציון ערכיות רצף שטחים פתוחים
+    """
+    CORE = (15)             # החלקה או חלק ממנה נמצאים בליבה  של רצף שטחים פתוחים
+    BUFFER = (8)            # החלקה או חלק ממנה נמצאים באזור חיץ
+    DISTURBANCE = (0)       # החלקה או חלק ממנה צמודים להפרה
