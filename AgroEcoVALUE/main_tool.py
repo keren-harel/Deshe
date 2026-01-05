@@ -69,8 +69,10 @@ def add_warning(oid, message):
 def calculate_corridor_scores():
     """Calculate corridor scores based on ECO layer."""
     try:
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Processing parcels for corridor scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", corridor_score_field]) as parcels:
-            for oid, geom, _ in parcels:
+            for i, (oid, geom, _) in enumerate(parcels):
                 score = CorridorScore.NONE.value[0]
                 with arcpy.da.SearchCursor(eco_layer, ["SHAPE@", "Type"]) as ecos:
                     for eco_geom, eco_type in ecos:
@@ -83,6 +85,7 @@ def calculate_corridor_scores():
                                 score = CorridorScore.CORRIDOR.value[0]
                             break
                 parcels.updateRow([oid, geom, score])
+                arcpy.SetProgressorPosition(i + 1)
         arcpy.AddMessage(f"Corridor scores saved in '{corridor_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Failed to calculate corridor scores: {e}")
@@ -93,9 +96,12 @@ def calculate_corridor_scores():
 def calculate_floodplain_scores():
     """Calculate floodplain scores based on overlap and distance."""
     try:
+        arcpy.SetProgressorLabel("Analyzing floodplain overlaps...")
         overlap_threshold = 0.2  # 20% overlap
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Processing parcels for floodplain scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", floodplain_score_field]) as parcels:
-            for oid, geom, _ in parcels:
+            for i, (oid, geom, _) in enumerate(parcels):
                 min_distance = None
                 max_overlap_ratio = 0.0
                 with arcpy.da.SearchCursor(floodplain_layer, ["SHAPE@"]) as floods:
@@ -118,6 +124,8 @@ def calculate_floodplain_scores():
                 else:
                     score = FloodplainScore.LOW.value
                 parcels.updateRow([oid, geom, score])
+                arcpy.SetProgressorPosition(i + 1)
+        arcpy.SetProgressorLabel("Floodplain scores calculated.")
         arcpy.AddMessage(f"Floodplain scores saved in '{floodplain_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Error calculating floodplain scores: {e}")
@@ -155,8 +163,10 @@ def calculate_natural_area_scores():
                 unit_list.append((eco_geom[0], score))
 
         # Now, assign scores to parcels based on largest overlapping unit
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Assigning natural area scores to parcels...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", NaturalArea_score_field]) as parcels:
-            for oid, parcel_geom, _ in parcels:
+            for i, (oid, parcel_geom, _) in enumerate(parcels):
                 max_overlap = 0.0
                 best_score = NaturalAreaScore.LOW.value
                 overlap_count = 0
@@ -174,6 +184,7 @@ def calculate_natural_area_scores():
                 # Add warning if overlaps more than one unit
                 if overlap_count > 1:
                     add_warning(oid, f"NaturalArea_score: the parcel overlaps {overlap_count} units. Score set based on largest overlapping unit.")
+                arcpy.SetProgressorPosition(i + 1)
         arcpy.AddMessage(f"Natural Area scores saved in '{NaturalArea_score_field}' based on largest overlapping unit.")
     except Exception as e:
         arcpy.AddError(f"Error calculating natural area scores: {e}")
@@ -185,20 +196,23 @@ def calculate_natural_area_scores():
 def calculate_open_space_corridor_score():
     """Calculate open space corridor scores based on rezef gridcode."""
     try:
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Processing parcels for open space corridor scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", rezef_score_field]) as parcels:
-            for oid, geom, _ in parcels:
-                score = OpenSpaceCorridorScore.DISTURBANCE.value[0]  # Default
+            for i, (oid, geom, _) in enumerate(parcels):
+                score = OpenSpaceCorridorScore.DISTURBANCE.value  # Default
                 with arcpy.da.SearchCursor(rezef_score_layer, ["SHAPE@", "gridcode"]) as ecos:
                     for eco_geom, gridcode in ecos:
                         if eco_geom.contains(geom):
                             grid_val = int(gridcode)
                             if grid_val in OpenSpaceCorridorType.CORE.value:
-                                score = OpenSpaceCorridorScore.CORE.value[0]
+                                score = OpenSpaceCorridorScore.CORE.value
                             elif grid_val in OpenSpaceCorridorType.BUFFER.value:
-                                score = OpenSpaceCorridorScore.BUFFER.value[0]
+                                score = OpenSpaceCorridorScore.BUFFER.value
                             # DISTURBANCE is default
                             break
                 parcels.updateRow([oid, geom, score])
+                arcpy.SetProgressorPosition(i + 1)
         arcpy.AddMessage(f"Open space corridor scores saved in '{rezef_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Failed to calculate open space corridor scores: {e}")
