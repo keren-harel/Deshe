@@ -3,7 +3,7 @@
 import arcpy
 from datetime import datetime
 import re
-from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore
+from eco_score_enum import CorridorScore, FloodplainScore,NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType 
 
 # ---------------------------
 # PARAMETERS FROM TOOL
@@ -18,6 +18,9 @@ NaturalArea_score_field = arcpy.GetParameterAsText(6) # Field for Natural Area s
 landscape_units_layer = arcpy.GetParameterAsText(7)   # Landscape Units layer
 rezef_score_layer = arcpy.GetParameterAsText(8)   # Rezef layer
 rezef_score_field = arcpy.GetParameterAsText(9)   # Field for Rezef score
+covertype_score_field = arcpy.GetParameterAsText(10)   # Field for cov type score
+
+
 # ---------------------------
 # VALIDATION
 # ---------------------------
@@ -217,6 +220,25 @@ def calculate_open_space_corridor_score():
     except Exception as e:
         arcpy.AddError(f"Failed to calculate open space corridor scores: {e}")
 
+def calculate_covertype_scores():
+    """Calculate cover type scores based on LandCov field."""
+    try:
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Processing parcels for cover type scores...", 0, parcel_count, 1)
+        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", "LandCov", covertype_score_field]) as parcels:
+            for i, (oid, geom, landcov, _) in enumerate(parcels):
+                score = CoverTypeScore.LOW.value  # Default
+                if any(re.search(pattern, landcov or "") for pattern in CoverType.OPEN.value):
+                    score = CoverTypeScore.HIGH.value
+                parcels.updateRow([oid, geom, landcov, score])
+                arcpy.SetProgressorPosition(i + 1)
+        arcpy.AddMessage(f"Cover type scores saved in '{covertype_score_field}'.")
+    except Exception as e:
+        arcpy.AddError(f"Failed to calculate cover type scores: {e}")
+
+
+
+
 # ---------------------------
 # WRITE WARNINGS
 # ---------------------------
@@ -239,7 +261,7 @@ def write_warnings():
 # ---------------------------
 # MAIN EXECUTION
 # ---------------------------
-for field_name in [corridor_score_field, floodplain_score_field, NaturalArea_score_field, rezef_score_field]:
+for field_name in [corridor_score_field, floodplain_score_field, NaturalArea_score_field, rezef_score_field, covertype_score_field]:
     if field_name not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
         arcpy.AddField_management(agricultural_layer, field_name, "SHORT")
 if 'WARNING' not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
@@ -252,7 +274,7 @@ arcpy.AddMessage("Start Time: {}".format(datetime.now().strftime("%d/%m/%Y %H:%M
 arcpy.AddMessage("--------------------------------------")
 
 # Set progressor
-arcpy.SetProgressor("step", "Running AgroEco Analysis...", 0, 5, 1)
+arcpy.SetProgressor("step", "Running AgroEco Analysis...", 0, 6, 1)
 
 arcpy.AddMessage("Step 1: Calculating corridor scores...")
 calculate_corridor_scores()
@@ -272,8 +294,13 @@ arcpy.AddMessage("--------------------------------------")
 arcpy.AddMessage("Step 4: Calculating open space corridor scores...")
 calculate_open_space_corridor_score()
 arcpy.SetProgressorPosition(4)
-write_warnings()
+arcpy.AddMessage("--------------------------------------")
+
+arcpy.AddMessage("Step 5: Calculating cover type scores...")
+calculate_covertype_scores()
 arcpy.SetProgressorPosition(5)
+write_warnings()
+arcpy.SetProgressorPosition(6)
 
 arcpy.AddMessage("======================================")
 arcpy.AddMessage("Process completed successfully!")
