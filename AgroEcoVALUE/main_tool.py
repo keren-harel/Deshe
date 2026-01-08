@@ -47,7 +47,7 @@ if missing_params:
     raise arcpy.ExecuteError  # Stop tool execution immediately
 
 # Check for required fields
-required_fields = ["LandCov"]
+required_fields = ["LandCov", "CoverType"]
 for field in required_fields:
     if field not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
         arcpy.AddError(f"Required field '{field}' not found in agricultural layer.")
@@ -221,20 +221,27 @@ def calculate_open_space_corridor_score():
         arcpy.AddError(f"Failed to calculate open space corridor scores: {e}")
 
 def calculate_covertype_scores():
-    """Calculate cover type scores based on LandCov field."""
+    """Calculate cover type scores based on cover type field."""
     try:
+        # First, read CoverType values by OID
+        cov_type_dict = {}
+        with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "CoverType"]) as search_cursor:
+            for oid, cov_type in search_cursor:
+                cov_type_dict[oid] = cov_type
+        
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Processing parcels for cover type scores...", 0, parcel_count, 1)
-        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", "LandCov", covertype_score_field]) as parcels:
-            for i, (oid, geom, landcov, _) in enumerate(parcels):
+        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", covertype_score_field]) as parcels:
+            for i, (oid, geom, _) in enumerate(parcels):
+                cov_type = cov_type_dict.get(oid, "")
                 score = CoverTypeScore.LOW.value  # Default
-                if any(re.search(pattern, landcov or "") for pattern in CoverType.OPEN.value):
+                if any(re.search(pattern, cov_type or "") for pattern in CoverType.OPEN.value):
                     score = CoverTypeScore.HIGH.value
-                parcels.updateRow([oid, geom, landcov, score])
+                parcels.updateRow([oid, geom, score])
                 arcpy.SetProgressorPosition(i + 1)
         arcpy.AddMessage(f"Cover type scores saved in '{covertype_score_field}'.")
     except Exception as e:
-        arcpy.AddError(f"Failed to calculate cover type scores: {e}")
+        arcpy.AddError(f"Failed to calculate Cover type scores: {e}")
 
 
 
