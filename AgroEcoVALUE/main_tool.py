@@ -3,27 +3,40 @@
 import arcpy
 from datetime import datetime
 import re
-from eco_score_enum import CorridorScore, FloodplainScore,NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType 
+from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType
 
-# ---------------------------
+# ----------------------------------------
 # PARAMETERS FROM TOOL
-# ---------------------------
+# ----------------------------------------
 agricultural_layer = arcpy.GetParameterAsText(0)  # Agricultural parcels layer
 eco_layer = arcpy.GetParameterAsText(1)           # ECO layer
 floodplain_layer = arcpy.GetParameterAsText(2)    # Floodplain layer
 corridor_score_field = arcpy.GetParameterAsText(3)  # Field for corridor score
 floodplain_score_field = arcpy.GetParameterAsText(4) # Field for floodplain score
-max_distance = float(arcpy.GetParameterAsText(5))      # Max distance (e.g., 500)
+max_distance = float(arcpy.GetParameterAsText(5))    # Max distance (e.g., 500)
 NaturalArea_score_field = arcpy.GetParameterAsText(6) # Field for Natural Area score
 landscape_units_layer = arcpy.GetParameterAsText(7)   # Landscape Units layer
-rezef_score_layer = arcpy.GetParameterAsText(8)   # Rezef layer
-rezef_score_field = arcpy.GetParameterAsText(9)   # Field for Rezef score
-covertype_score_field = arcpy.GetParameterAsText(10)   # Field for cov type score
+rezef_score_layer = arcpy.GetParameterAsText(8)       # Rezef layer
+rezef_score_field = arcpy.GetParameterAsText(9)       # Field for Rezef score
+covertype_score_field = arcpy.GetParameterAsText(10)  # Field for cover type score
 
+# ----------------------------------------
+# DEFAULT FIELD NAMES IF USER DID NOT PROVIDE
+# ----------------------------------------
+if not corridor_score_field:
+    corridor_score_field = "CORRIDOR_SCORE"
+if not floodplain_score_field:
+    floodplain_score_field = "FLOODPLAIN_SCORE"
+if not NaturalArea_score_field:
+    NaturalArea_score_field = "NATURALAREA_SCORE"
+if not rezef_score_field:
+    rezef_score_field = "REZEF_SCORE"
+if not covertype_score_field:
+    covertype_score_field = "COVERTYPE_SCORE"
 
-# ---------------------------
+# ----------------------------------------
 # VALIDATION
-# ---------------------------
+# ----------------------------------------
 missing_params = []
 if not agricultural_layer:
     missing_params.append("Agricultural parcels layer")
@@ -31,17 +44,10 @@ if not eco_layer:
     missing_params.append("ECO layer")
 if not floodplain_layer:
     missing_params.append("Floodplain layer")
-if not corridor_score_field:
-    missing_params.append("Corridor score field name")
-if not floodplain_score_field:
-    missing_params.append("Floodplain score field name")
 if not max_distance:
     missing_params.append("Max distance")
-if not NaturalArea_score_field:
-    missing_params.append("Natural Area score field name")
 if not landscape_units_layer:
     missing_params.append("Landscape Units layer")
-
 if missing_params:
     arcpy.AddError("Missing required parameters: " + ", ".join(missing_params))
     raise arcpy.ExecuteError  # Stop tool execution immediately
@@ -53,9 +59,9 @@ for field in required_fields:
         arcpy.AddError(f"Required field '{field}' not found in agricultural layer.")
         raise arcpy.ExecuteError
 
-# ---------------------------
+# ----------------------------------------
 # GLOBAL WARNING DICTIONARY
-# ---------------------------
+# ----------------------------------------
 warnings_by_oid = {}
 
 def add_warning(oid, message):
@@ -66,9 +72,9 @@ def add_warning(oid, message):
         pass
     warnings_by_oid.setdefault(oid, []).append(message)
 
-# ---------------------------
+# ----------------------------------------
 # CALCULATE CORRIDOR SCORE
-# ---------------------------
+# ----------------------------------------
 def calculate_corridor_scores():
     """Calculate corridor scores based on ECO layer."""
     try:
@@ -93,9 +99,9 @@ def calculate_corridor_scores():
     except Exception as e:
         arcpy.AddError(f"Failed to calculate corridor scores: {e}")
 
-# ---------------------------
+# ----------------------------------------
 # CALCULATE FLOODPLAIN SCORE
-# ---------------------------
+# ----------------------------------------
 def calculate_floodplain_scores():
     """Calculate floodplain scores based on overlap and distance."""
     try:
@@ -114,10 +120,9 @@ def calculate_floodplain_scores():
                             if intersection.area > 0:
                                 overlap_ratio = intersection.area / geom.area
                                 max_overlap_ratio = max(max_overlap_ratio, overlap_ratio)
-                        distance = geom.distanceTo(flood_geom)
-                        if min_distance is None or distance < min_distance:
-                            min_distance = distance
-                # Assign score
+                            distance = geom.distanceTo(flood_geom)
+                            if min_distance is None or distance < min_distance:
+                                min_distance = distance
                 if max_overlap_ratio >= overlap_threshold:
                     score = FloodplainScore.MAXIMUM.value
                     if max_overlap_ratio < 0.95:
