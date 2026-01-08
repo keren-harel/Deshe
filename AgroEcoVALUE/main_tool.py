@@ -3,7 +3,7 @@
 import arcpy
 from datetime import datetime
 import re
-from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType
+from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType, WaterTypeScore, WaterType
 
 # ----------------------------------------
 # PARAMETERS FROM TOOL
@@ -20,7 +20,7 @@ floodplain_score_field = arcpy.GetParameterAsText(7) # Field for floodplain scor
 NaturalArea_score_field = arcpy.GetParameterAsText(8) # Field for Natural Area score
 rezef_score_field = arcpy.GetParameterAsText(9)       # Field for Rezef score
 covertype_score_field = arcpy.GetParameterAsText(10)  # Field for cover type score
-
+watertype_score_field = arcpy.GetParameterAsText(11)  # Field for water type score
 # ----------------------------------------
 # DEFAULT FIELD NAMES IF USER DID NOT PROVIDE
 # ----------------------------------------
@@ -34,6 +34,8 @@ if not rezef_score_field:
     rezef_score_field = "REZEF_SCORE"
 if not covertype_score_field:
     covertype_score_field = "COVERTYPE_SCORE"
+if not watertype_score_field:
+    watertype_score_field = "WATERTYPE_SCORE"
 
 # ----------------------------------------
 # VALIDATION
@@ -54,7 +56,7 @@ if missing_params:
     raise arcpy.ExecuteError  # Stop tool execution immediately
 
 # Check for required fields
-required_fields = ["LandCov", "CoverType"]
+required_fields = ["LandCov", "CoverType", "WaterType"]
 for field in required_fields:
     if field not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
         arcpy.AddError(f"Required field '{field}' not found in agricultural layer.") #! במידה ונרצה להשתמש בשכבות חיצונית במקום צריך להוריד את השגיאה ולהפוך להתראה
@@ -249,28 +251,31 @@ def calculate_covertype_scores():
     except Exception as e:
         arcpy.AddError(f"Failed to calculate Cover type scores: {e}")
 
-def calculate_covertype_scores():
-    """Calculate cover type scores based on cover type field."""
+def calculate_watertype_scores():
+    """Calculate water type scores based on water type field."""
     try:
-        # First, read CoverType values by OID
-        cov_type_dict = {}
-        with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "CoverType"]) as search_cursor:
-            for oid, cov_type in search_cursor:
-                cov_type_dict[oid] = cov_type
+        water_type_dict = {}
+        with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "WaterType"]) as search_cursor:
+            for oid, water_type in search_cursor:
+                water_type_dict[oid] = water_type
         
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
-        arcpy.SetProgressor("step", "Processing parcels for cover type scores...", 0, parcel_count, 1)
-        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", covertype_score_field]) as parcels:
+        arcpy.SetProgressor("step", "Processing parcels for water type scores...", 0, parcel_count, 1)
+        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", watertype_score_field]) as parcels:
             for i, (oid, geom, _) in enumerate(parcels):
-                cov_type = cov_type_dict.get(oid, "")
-                score = CoverTypeScore.LOW.value  # Default
-                if any(re.search(pattern, cov_type or "") for pattern in CoverType.OPEN.value):
-                    score = CoverTypeScore.HIGH.value
+                water_type = water_type_dict.get(oid, "")
+                score = WaterTypeScore.LOW.value  # Default
+                if any(re.search(pattern, water_type or "") for pattern in WaterType.BAAL.value):
+                    score = WaterTypeScore.HIGH.value
+                elif any(re.search(pattern, water_type or "") for pattern in WaterType.SHELACHIN.value):
+                    score = WaterTypeScore.LOW.value
+                else:
+                    add_warning(oid, f"WaterType_score: Unrecognized WaterType '{water_type}'. Assigned LOW score.")
                 parcels.updateRow([oid, geom, score])
                 arcpy.SetProgressorPosition(i + 1)
-        arcpy.AddMessage(f"Cover type scores saved in '{covertype_score_field}'.")
+        arcpy.AddMessage(f"Water type scores saved in '{watertype_score_field}'.")
     except Exception as e:
-        arcpy.AddError(f"Failed to calculate Cover type scores: {e}")
+        arcpy.AddError(f"Failed to calculate Water type scores: {e}")
 
 
 
@@ -296,7 +301,7 @@ def write_warnings():
 # ---------------------------
 # MAIN EXECUTION
 # ---------------------------
-for field_name in [corridor_score_field, floodplain_score_field, NaturalArea_score_field, rezef_score_field, covertype_score_field]:
+for field_name in [corridor_score_field, floodplain_score_field, NaturalArea_score_field, rezef_score_field, covertype_score_field, watertype_score_field]:
     if field_name not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
         arcpy.AddField_management(agricultural_layer, field_name, "SHORT")
 if 'WARNING' not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
@@ -334,8 +339,14 @@ arcpy.AddMessage("--------------------------------------")
 arcpy.AddMessage("Step 5: Calculating cover type scores...")
 calculate_covertype_scores()
 arcpy.SetProgressorPosition(5)
-write_warnings()
+arcpy.AddMessage("--------------------------------------")
+
+arcpy.AddMessage("Step 6: Calculating irrigation type scores...")
+calculate_watertype_scores()
 arcpy.SetProgressorPosition(6)
+
+write_warnings()
+arcpy.SetProgressorPosition(7)
 
 arcpy.AddMessage("======================================")
 arcpy.AddMessage("Process completed successfully!")
