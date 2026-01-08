@@ -11,12 +11,13 @@ from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, Natu
 agricultural_layer = arcpy.GetParameterAsText(0)  # Agricultural parcels layer
 eco_layer = arcpy.GetParameterAsText(1)           # ECO layer
 floodplain_layer = arcpy.GetParameterAsText(2)    # Floodplain layer
-corridor_score_field = arcpy.GetParameterAsText(3)  # Field for corridor score
-floodplain_score_field = arcpy.GetParameterAsText(4) # Field for floodplain score
-max_distance = float(arcpy.GetParameterAsText(5))    # Max distance (e.g., 500)
-NaturalArea_score_field = arcpy.GetParameterAsText(6) # Field for Natural Area score
-landscape_units_layer = arcpy.GetParameterAsText(7)   # Landscape Units layer
-rezef_score_layer = arcpy.GetParameterAsText(8)       # Rezef layer
+max_distance = float(arcpy.GetParameterAsText(3))    # Max distance (e.g., 500)
+landscape_units_layer = arcpy.GetParameterAsText(4)   # Landscape Units layer
+rezef_score_layer = arcpy.GetParameterAsText(5)       # Rezef layer
+
+corridor_score_field = arcpy.GetParameterAsText(6)  # Field for corridor score
+floodplain_score_field = arcpy.GetParameterAsText(7) # Field for floodplain score
+NaturalArea_score_field = arcpy.GetParameterAsText(8) # Field for Natural Area score
 rezef_score_field = arcpy.GetParameterAsText(9)       # Field for Rezef score
 covertype_score_field = arcpy.GetParameterAsText(10)  # Field for cover type score
 
@@ -56,7 +57,7 @@ if missing_params:
 required_fields = ["LandCov", "CoverType"]
 for field in required_fields:
     if field not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
-        arcpy.AddError(f"Required field '{field}' not found in agricultural layer.")
+        arcpy.AddError(f"Required field '{field}' not found in agricultural layer.") #! במידה ונרצה להשתמש בשכבות חיצונית במקום צריך להוריד את השגיאה ולהפוך להתראה
         raise arcpy.ExecuteError
 
 # ----------------------------------------
@@ -248,6 +249,28 @@ def calculate_covertype_scores():
     except Exception as e:
         arcpy.AddError(f"Failed to calculate Cover type scores: {e}")
 
+def calculate_covertype_scores():
+    """Calculate cover type scores based on cover type field."""
+    try:
+        # First, read CoverType values by OID
+        cov_type_dict = {}
+        with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "CoverType"]) as search_cursor:
+            for oid, cov_type in search_cursor:
+                cov_type_dict[oid] = cov_type
+        
+        parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
+        arcpy.SetProgressor("step", "Processing parcels for cover type scores...", 0, parcel_count, 1)
+        with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", covertype_score_field]) as parcels:
+            for i, (oid, geom, _) in enumerate(parcels):
+                cov_type = cov_type_dict.get(oid, "")
+                score = CoverTypeScore.LOW.value  # Default
+                if any(re.search(pattern, cov_type or "") for pattern in CoverType.OPEN.value):
+                    score = CoverTypeScore.HIGH.value
+                parcels.updateRow([oid, geom, score])
+                arcpy.SetProgressorPosition(i + 1)
+        arcpy.AddMessage(f"Cover type scores saved in '{covertype_score_field}'.")
+    except Exception as e:
+        arcpy.AddError(f"Failed to calculate Cover type scores: {e}")
 
 
 
