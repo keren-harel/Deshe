@@ -330,8 +330,10 @@ def calculate_watertype_scores():
                     factor = DynamicScore.MAXIMUM.value
                 elif any(re.search(pattern, water_type or "") for pattern in WaterType.SHELACHIN.value):
                     factor = DynamicScore.NONE.value
+                elif any(re.search(pattern, water_type or "") for pattern in WaterType.OTHER.value):
+                    factor = DynamicScore.NONE.value
                 else:
-                    add_warning(oid, f"WaterType_score: Unrecognized WaterType '{water_type}'. Assigned LOW score.")
+                    add_warning(oid, f"WaterType_score: Unrecognized WaterType '{water_type}'. Assigned 0 score.")
 
                 final_score = round(factor * per_metric_score)
                 parcels.updateRow([oid, geom, final_score])
