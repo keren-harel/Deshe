@@ -341,7 +341,6 @@ def calculate_watertype_scores():
     except Exception as e:
         arcpy.AddError(f"Failed to calculate Water type scores: {e}")
 
-
 def write_warnings():
     """Write collected warnings to WARNING field."""
     try:
