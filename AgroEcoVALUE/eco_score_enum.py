@@ -2,6 +2,33 @@
 # -*- coding: utf-8 -*-
 from enum import Enum
 
+# =========================================
+# ENUM DEFINITIONS WITH RELATIVE FACTORS
+# =========================================
+# Each score is defined as a factor:
+# MAXIMUM = 1.0 (full score)
+# MEDIUM = 0.5 (half score)
+# LOW = 1/3 (one-third score)
+# NONE = 0.0 (no score)
+# The actual numeric score will be calculated dynamically:
+# final_score = max_possible_score * factor
+# =========================================
+
+class DynamicScore(Enum):
+    MAXIMUM = 1.0      # Full score
+    MEDIUM = 0.5       # Half score
+    LOW = 1/3      # One-third score
+    NONE = 0.0          # No score
+
+class spatialScaleScores(Enum):
+    """
+    ציון משוקלל עבור כל סקאלה מרחבית
+    """
+    NATIONAL = 30
+    Agricultural_Landscape_Unit = 45
+    Natural_Features = 15
+    Agricultural_Features = 10
+
 class CorridorScore(Enum):
     """
     מסדרון אקולוגי ארצי או אזורי

@@ -3,68 +3,50 @@
 import arcpy
 from datetime import datetime
 import re
-from eco_score_enum import CorridorScore, FloodplainScore, NaturalAreaType, NaturalAreaScore, OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType, WaterTypeScore, WaterType
+from eco_score_enum import (
+    CorridorScore, FloodplainScore, NaturalAreaType, DynamicScore,
+    OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType,
+    WaterTypeScore, WaterType, spatialScaleScores
+)
 
-# ----------------------------------------
+# -------------------------------
 # PARAMETERS FROM TOOL
-# ----------------------------------------
+# -------------------------------
 agricultural_layer = arcpy.GetParameterAsText(0)  # Agricultural parcels layer
 eco_layer = arcpy.GetParameterAsText(1)           # ECO layer
 floodplain_layer = arcpy.GetParameterAsText(2)    # Floodplain layer
-max_distance = float(arcpy.GetParameterAsText(3))    # Max distance (e.g., 500)
-landscape_units_layer = arcpy.GetParameterAsText(4)   # Landscape Units layer
-rezef_score_layer = arcpy.GetParameterAsText(5)       # Rezef layer
+max_distance = arcpy.GetParameterAsText(3)        # Max distance (optional)
+landscape_units_layer = arcpy.GetParameterAsText(4)  # Landscape Units layer
+rezef_score_layer = arcpy.GetParameterAsText(5)      # Rezef layer
 
-corridor_score_field = arcpy.GetParameterAsText(6)  # Field for corridor score
-floodplain_score_field = arcpy.GetParameterAsText(7) # Field for floodplain score
-NaturalArea_score_field = arcpy.GetParameterAsText(8) # Field for Natural Area score
-rezef_score_field = arcpy.GetParameterAsText(9)       # Field for Rezef score
-covertype_score_field = arcpy.GetParameterAsText(10)  # Field for cover type score
-watertype_score_field = arcpy.GetParameterAsText(11)  # Field for water type score
-# ----------------------------------------
-# DEFAULT FIELD NAMES IF USER DID NOT PROVIDE
-# ----------------------------------------
-if not corridor_score_field:
-    corridor_score_field = "CORRIDOR_SCORE"
-if not floodplain_score_field:
-    floodplain_score_field = "FLOODPLAIN_SCORE"
-if not NaturalArea_score_field:
-    NaturalArea_score_field = "NATURALAREA_SCORE"
-if not rezef_score_field:
-    rezef_score_field = "REZEF_SCORE"
-if not covertype_score_field:
-    covertype_score_field = "COVERTYPE_SCORE"
-if not watertype_score_field:
-    watertype_score_field = "WATERTYPE_SCORE"
+corridor_score_field = arcpy.GetParameterAsText(6)
+floodplain_score_field = arcpy.GetParameterAsText(7)
+NaturalArea_score_field = arcpy.GetParameterAsText(8)
+rezef_score_field = arcpy.GetParameterAsText(9)
+covertype_score_field = arcpy.GetParameterAsText(10)
+watertype_score_field = arcpy.GetParameterAsText(11)
 
-# ----------------------------------------
-# VALIDATION
-# ----------------------------------------
-missing_params = []
+corridor_unit_layer = arcpy.GetParameterAsText(12)
+corridor_unit_field = arcpy.GetParameterAsText(13)
+
+
+# -------------------------------
+# VALIDATION: Agricultural layer is mandatory
+# -------------------------------
 if not agricultural_layer:
-    missing_params.append("Agricultural parcels layer")
-if not eco_layer:
-    missing_params.append("ECO layer")
-if not floodplain_layer:
-    missing_params.append("Floodplain layer")
-if not max_distance:
-    missing_params.append("Max distance")
-if not landscape_units_layer:
-    missing_params.append("Landscape Units layer")
-if missing_params:
-    arcpy.AddError("Missing required parameters: " + ", ".join(missing_params))
-    raise arcpy.ExecuteError  # Stop tool execution immediately
+    arcpy.AddError("Agricultural parcels layer is required.")
+    raise arcpy.ExecuteError
 
-# Check for required fields
+# Check required fields in agricultural layer
 required_fields = ["LandCov", "CoverType", "WaterType"]
 for field in required_fields:
     if field not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
-        arcpy.AddError(f"Required field '{field}' not found in agricultural layer.") #! במידה ונרצה להשתמש בשכבות חיצונית במקום צריך להוריד את השגיאה ולהפוך להתראה
+        arcpy.AddError(f"Required field '{field}' not found in agricultural layer.")
         raise arcpy.ExecuteError
 
-# ----------------------------------------
+# -------------------------------
 # GLOBAL WARNING DICTIONARY
-# ----------------------------------------
+# -------------------------------
 warnings_by_oid = {}
 
 def add_warning(oid, message):
@@ -75,41 +57,98 @@ def add_warning(oid, message):
         pass
     warnings_by_oid.setdefault(oid, []).append(message)
 
-# ----------------------------------------
-# CALCULATE CORRIDOR SCORE
-# ----------------------------------------
+# -------------------------------
+# Weighted Scoring Setup
+# -------------------------------
+categories = {
+    "NATIONAL": {
+        "fields": [corridor_score_field, corridor_unit_field], 
+        "total_max_score": spatialScaleScores.NATIONAL.value    
+    },
+    "Agricultural_Landscape_Unit": {
+        "fields": [floodplain_score_field, NaturalArea_score_field, rezef_score_field],
+        "total_max_score": spatialScaleScores.Agricultural_Landscape_Unit.value
+    },
+    "Agricultural_Features": {
+        "fields": [covertype_score_field, watertype_score_field],
+        "total_max_score": spatialScaleScores.Agricultural_Features.value
+    },
+}
+
+category_max_scores = {}
+for category, info in categories.items():
+    active_fields = [f for f in info["fields"] if f]
+    if active_fields:
+        per_metric_score = info["total_max_score"] / len(active_fields)
+    else:
+        per_metric_score = 0
+    category_max_scores[category] = per_metric_score
+
+# Inform user
+arcpy.AddMessage("========== Weighted Scoring Setup ==========")
+for cat, score in category_max_scores.items():
+    arcpy.AddMessage(f"Category '{cat}': max per metric = {score}")
+arcpy.AddMessage("---------------------------------------------")
+
+# -------------------------------
+# Add fields only if active
+# -------------------------------
+for category, info in categories.items():
+    for field_name in info["fields"]:
+        if field_name and field_name not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
+            arcpy.AddField_management(agricultural_layer, field_name, "SHORT")
+
+# Add WARNING field if needed
+if 'WARNING' not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
+    arcpy.AddField_management(agricultural_layer, 'WARNING', 'TEXT', field_length=2000)
+
+# -------------------------------
+# FUNCTIONS
+# -------------------------------
 def calculate_corridor_scores():
-    """Calculate corridor scores based on ECO layer."""
+    """Calculate corridor scores based on ECO layer and apply weighted scoring using category_max_scores."""
     try:
+        # Get total parcel count for progressor
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Processing parcels for corridor scores...", 0, parcel_count, 1)
+
+        # Get per-metric score for NATIONAL category from pre-calculated dictionary
+        per_metric_score = category_max_scores.get("NATIONAL", 0)
+
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", corridor_score_field]) as parcels:
             for i, (oid, geom, _) in enumerate(parcels):
-                score = CorridorScore.NONE.value[0]
+                # Default factor is NONE (0.0)
+                base_factor = DynamicScore.NONE.value
+
+                # Search ECO layer for matching geometry
                 with arcpy.da.SearchCursor(eco_layer, ["SHAPE@", "Type"]) as ecos:
                     for eco_geom, eco_type in ecos:
                         if eco_geom.contains(geom):
+                            # Assign factor based on corridor type
                             if re.search(CorridorScore.CORE.value[1], eco_type):
-                                score = CorridorScore.CORE.value[0]
+                                base_factor = DynamicScore.MAXIMUM.value
                             elif re.search(CorridorScore.TRANSITION.value[1], eco_type):
-                                score = CorridorScore.TRANSITION.value[0]
+                                base_factor = DynamicScore.MEDIUM.value
                             elif re.search(CorridorScore.CORRIDOR.value[1], eco_type):
-                                score = CorridorScore.CORRIDOR.value[0]
+                                base_factor = DynamicScore.LOW.value
                             break
-                parcels.updateRow([oid, geom, score])
+
+                # Multiply factor by per-metric score
+                final_score = round(base_factor * per_metric_score)
+
+                # Update row with calculated score
+                parcels.updateRow([oid, geom, final_score])
                 arcpy.SetProgressorPosition(i + 1)
+
         arcpy.AddMessage(f"Corridor scores saved in '{corridor_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Failed to calculate corridor scores: {e}")
 
-# ----------------------------------------
-# CALCULATE FLOODPLAIN SCORE
-# ----------------------------------------
 def calculate_floodplain_scores():
     """Calculate floodplain scores based on overlap and distance."""
     try:
         arcpy.SetProgressorLabel("Analyzing floodplain overlaps...")
-        overlap_threshold = 0.2  # 20% overlap
+        overlap_threshold = 0.2
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Processing parcels for floodplain scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", floodplain_score_field]) as parcels:
@@ -130,56 +169,48 @@ def calculate_floodplain_scores():
                     score = FloodplainScore.MAXIMUM.value
                     if max_overlap_ratio < 0.95:
                         add_warning(oid, f"FloodplainScore: {min_distance:.1f} m from floodplain; max overlap = {max_overlap_ratio:.2%}")
-                elif min_distance is not None and min_distance <= max_distance:
+                elif min_distance is not None and float(max_distance) and min_distance <= float(max_distance):
                     score = FloodplainScore.MEDIUM.value
                 else:
                     score = FloodplainScore.LOW.value
                 parcels.updateRow([oid, geom, score])
                 arcpy.SetProgressorPosition(i + 1)
-        arcpy.SetProgressorLabel("Floodplain scores calculated.")
         arcpy.AddMessage(f"Floodplain scores saved in '{floodplain_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Error calculating floodplain scores: {e}")
 
-# ---------------------------
-# CALCULATE NATURAL AREA SCORE
-# ---------------------------
 def calculate_natural_area_scores():
+    """Calculate natural area scores based on landscape units."""
     try:
-        # First, calculate scores for each landscape unit
         unit_list = []
         with arcpy.da.SearchCursor(landscape_units_layer, ["SHAPE@"]) as eco_cursor:
             for eco_geom in eco_cursor:
-                # Accumulate areas for this landscape unit
                 sum_open_area = 0.0
                 sum_total_area = 0.0
                 with arcpy.da.SearchCursor(agricultural_layer, ["SHAPE@", "LandCov"]) as parcel_cursor:
                     for geom, landcov in parcel_cursor:
                         if geom.overlaps(eco_geom[0]) or geom.within(eco_geom[0]) or eco_geom[0].within(geom):
-                            # Accumulate based on landcov
-                            if re.search(NaturalAreaType.OPEN.value[1], landcov) or re.search(NaturalAreaType.OPEN.value[0], landcov): 
+                            if re.search(NaturalAreaType.OPEN.value[1], landcov) or re.search(NaturalAreaType.OPEN.value[0], landcov):
                                 sum_open_area += geom.area
                             sum_total_area += geom.area
-                # Calculate ratio and score
                 if sum_total_area > 0:
                     ratio = sum_open_area / sum_total_area
                     if ratio < 0.2:
-                        score = NaturalAreaScore.LOW.value
+                        score = DynamicScore.LOW.value
                     elif 0.2 <= ratio < 0.8:
-                        score = NaturalAreaScore.MEDIUM.value
-                    else:  # ratio >= 0.8
-                        score = NaturalAreaScore.MAXIMUM.value
+                        score = DynamicScore.MEDIUM.value
+                    else:
+                        score = DynamicScore.MAXIMUM.value
                 else:
-                    score = NaturalAreaScore.LOW.value  # Default if no parcels
+                    score = DynamicScore.LOW.value
                 unit_list.append((eco_geom[0], score))
 
-        # Now, assign scores to parcels based on largest overlapping unit
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Assigning natural area scores to parcels...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", NaturalArea_score_field]) as parcels:
             for i, (oid, parcel_geom, _) in enumerate(parcels):
                 max_overlap = 0.0
-                best_score = NaturalAreaScore.LOW.value
+                best_score = DynamicScore.LOW.value
                 overlap_count = 0
                 for unit_geom, unit_score in unit_list:
                     if parcel_geom.overlaps(unit_geom) or parcel_geom.within(unit_geom) or unit_geom.within(parcel_geom):
@@ -190,20 +221,14 @@ def calculate_natural_area_scores():
                             if overlap_area > max_overlap:
                                 max_overlap = overlap_area
                                 best_score = unit_score
-                # Update parcel with best score
                 parcels.updateRow([oid, parcel_geom, best_score])
-                # Add warning if overlaps more than one unit
                 if overlap_count > 1:
                     add_warning(oid, f"NaturalArea_score: the parcel overlaps {overlap_count} units. Score set based on largest overlapping unit.")
                 arcpy.SetProgressorPosition(i + 1)
-        arcpy.AddMessage(f"Natural Area scores saved in '{NaturalArea_score_field}' based on largest overlapping unit.")
+        arcpy.AddMessage(f"Natural Area scores saved in '{NaturalArea_score_field}'.")
     except Exception as e:
         arcpy.AddError(f"Error calculating natural area scores: {e}")
 
-
-# ---------------------------
-# CALCULATE OPEN SPACE CORRIDOR SCORE
-# ---------------------------
 def calculate_open_space_corridor_score():
     """Calculate open space corridor scores based on rezef gridcode."""
     try:
@@ -211,7 +236,7 @@ def calculate_open_space_corridor_score():
         arcpy.SetProgressor("step", "Processing parcels for open space corridor scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", rezef_score_field]) as parcels:
             for i, (oid, geom, _) in enumerate(parcels):
-                score = OpenSpaceCorridorScore.DISTURBANCE.value  # Default
+                score = OpenSpaceCorridorScore.DISTURBANCE.value
                 with arcpy.da.SearchCursor(rezef_score_layer, ["SHAPE@", "gridcode"]) as ecos:
                     for eco_geom, gridcode in ecos:
                         if eco_geom.contains(geom):
@@ -220,7 +245,6 @@ def calculate_open_space_corridor_score():
                                 score = OpenSpaceCorridorScore.CORE.value
                             elif grid_val in OpenSpaceCorridorType.BUFFER.value:
                                 score = OpenSpaceCorridorScore.BUFFER.value
-                            # DISTURBANCE is default
                             break
                 parcels.updateRow([oid, geom, score])
                 arcpy.SetProgressorPosition(i + 1)
@@ -231,18 +255,16 @@ def calculate_open_space_corridor_score():
 def calculate_covertype_scores():
     """Calculate cover type scores based on cover type field."""
     try:
-        # First, read CoverType values by OID
         cov_type_dict = {}
         with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "CoverType"]) as search_cursor:
             for oid, cov_type in search_cursor:
                 cov_type_dict[oid] = cov_type
-        
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Processing parcels for cover type scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", covertype_score_field]) as parcels:
             for i, (oid, geom, _) in enumerate(parcels):
                 cov_type = cov_type_dict.get(oid, "")
-                score = CoverTypeScore.LOW.value  # Default
+                score = CoverTypeScore.LOW.value
                 if any(re.search(pattern, cov_type or "") for pattern in CoverType.OPEN.value):
                     score = CoverTypeScore.HIGH.value
                 parcels.updateRow([oid, geom, score])
@@ -258,13 +280,12 @@ def calculate_watertype_scores():
         with arcpy.da.SearchCursor(agricultural_layer, ["OID@", "WaterType"]) as search_cursor:
             for oid, water_type in search_cursor:
                 water_type_dict[oid] = water_type
-        
         parcel_count = int(arcpy.GetCount_management(agricultural_layer).getOutput(0))
         arcpy.SetProgressor("step", "Processing parcels for water type scores...", 0, parcel_count, 1)
         with arcpy.da.UpdateCursor(agricultural_layer, ["OID@", "SHAPE@", watertype_score_field]) as parcels:
             for i, (oid, geom, _) in enumerate(parcels):
                 water_type = water_type_dict.get(oid, "")
-                score = WaterTypeScore.LOW.value  # Default
+                score = WaterTypeScore.LOW.value
                 if any(re.search(pattern, water_type or "") for pattern in WaterType.BAAL.value):
                     score = WaterTypeScore.HIGH.value
                 elif any(re.search(pattern, water_type or "") for pattern in WaterType.SHELACHIN.value):
@@ -278,10 +299,6 @@ def calculate_watertype_scores():
         arcpy.AddError(f"Failed to calculate Water type scores: {e}")
 
 
-
-# ---------------------------
-# WRITE WARNINGS
-# ---------------------------
 def write_warnings():
     """Write collected warnings to WARNING field."""
     try:
@@ -294,61 +311,32 @@ def write_warnings():
                         if current_warn:
                             new_warn = current_warn + "; " + new_warn
                         cursor.updateRow([oid, new_warn])
-        arcpy.AddMessage("Warnings written to 'WARNING' field.")
+            arcpy.AddMessage("Warnings written to 'WARNING' field.")
     except Exception as e:
         arcpy.AddError(f"Failed to write warnings: {e}")
 
-# ---------------------------
+# -------------------------------
 # MAIN EXECUTION
-# ---------------------------
-for field_name in [corridor_score_field, floodplain_score_field, NaturalArea_score_field, rezef_score_field, covertype_score_field, watertype_score_field]:
-    if field_name not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
-        arcpy.AddField_management(agricultural_layer, field_name, "SHORT")
-if 'WARNING' not in [f.name for f in arcpy.ListFields(agricultural_layer)]:
-    arcpy.AddField_management(agricultural_layer, 'WARNING', 'TEXT', field_length=2000)
-
-
-
+# -------------------------------
 arcpy.AddMessage("========== AgroEco Analysis ==========")
 arcpy.AddMessage("Start Time: {}".format(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
 arcpy.AddMessage("--------------------------------------")
 
-# Set progressor
 arcpy.SetProgressor("step", "Running AgroEco Analysis...", 0, 6, 1)
 
-arcpy.AddMessage("Step 1: Calculating corridor scores...")
-calculate_corridor_scores()
+# Step 1: Corridor
+if eco_layer and corridor_score_field:
+    arcpy.AddMessage("Step 1: Calculating corridor scores...")
+    calculate_corridor_scores()
+else:
+    arcpy.AddWarning("Corridor score skipped (missing ECO layer or field).")
 arcpy.SetProgressorPosition(1)
-arcpy.AddMessage("--------------------------------------")
 
-arcpy.AddMessage("Step 2: Calculating floodplain scores...")
-calculate_floodplain_scores()
-arcpy.SetProgressorPosition(2)
-arcpy.AddMessage("--------------------------------------")
-
-arcpy.AddMessage("Step 3: Calculating natural area scores...")
-calculate_natural_area_scores()
-arcpy.SetProgressorPosition(3)
-arcpy.AddMessage("--------------------------------------")
-
-arcpy.AddMessage("Step 4: Calculating open space corridor scores...")
-calculate_open_space_corridor_score()
-arcpy.SetProgressorPosition(4)
-arcpy.AddMessage("--------------------------------------")
-
-arcpy.AddMessage("Step 5: Calculating cover type scores...")
-calculate_covertype_scores()
-arcpy.SetProgressorPosition(5)
-arcpy.AddMessage("--------------------------------------")
-
-arcpy.AddMessage("Step 6: Calculating irrigation type scores...")
-calculate_watertype_scores()
-arcpy.SetProgressorPosition(6)
+# Steps 2-6: Functions will be updated later with weighted logic
+arcpy.AddMessage("Steps 2-6 will use weighted logic in next phase.")
 
 write_warnings()
 arcpy.SetProgressorPosition(7)
 
 arcpy.AddMessage("======================================")
 arcpy.AddMessage("Process completed successfully!")
-
-
