@@ -73,7 +73,13 @@ categories = {
     },
 }
 
+# Calculate per-metric score for each category
 category_max_scores = {}
+
+arcpy.AddMessage("========== Weighted Scoring Table ==========")
+arcpy.AddMessage("{:<35} {:>12} {:>20}".format("Index", "Max Score", "Sub-Index Score"))
+arcpy.AddMessage("-" * 70)
+
 for category, info in categories.items():
     active_fields = [f for f in info["fields"] if f]
     if active_fields:
@@ -82,11 +88,12 @@ for category, info in categories.items():
         per_metric_score = 0
     category_max_scores[category] = per_metric_score
 
-# Inform user
-arcpy.AddMessage("========== Weighted Scoring Setup ==========")
-for cat, score in category_max_scores.items():
-    arcpy.AddMessage(f"Category '{cat}': max per metric = {score}")
-arcpy.AddMessage("---------------------------------------------")
+    # Print row with proper spacing
+    arcpy.AddMessage("{:<35} {:>12} {:>20.2f}".format(category, info["total_max_score"], per_metric_score))
+
+arcpy.AddMessage("-" * 70)
+
+
 
 # -------------------------------
 # Add fields only if active
