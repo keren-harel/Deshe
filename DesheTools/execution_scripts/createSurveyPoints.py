@@ -7,7 +7,7 @@ DESHE_TOOLS_FOLDER_PATH = str(Path(__file__).parents[1].absolute())
 EXCEL_NAME = "classifyTypeCover_Key.xlsx"
 SHEET_NAME = "cover_type_keys"
 CONF_FOLDER_NAME = "configuration"
-JOIN_FIELD = "COV_TYPE"
+JOIN_FIELD = "CoverTypeName"
 COL_NAME = "result"
 natua_possibilities = [
     "עשבוני",
