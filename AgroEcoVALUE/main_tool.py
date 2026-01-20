@@ -124,19 +124,20 @@ def calculate_corridor_scores():
             for i, (oid, geom, _) in enumerate(parcels):
                 # Default factor is NONE (0.0)
                 base_factor = DynamicScore.NONE.value
-
+                
                 # Search ECO layer for matching geometry
                 with arcpy.da.SearchCursor(eco_layer, ["SHAPE@", "Type"]) as ecos:
                     for eco_geom, eco_type in ecos:
                         if eco_geom.contains(geom):
                             # Assign factor based on corridor type
-                            if re.search(CorridorScore.CORE.value[1], eco_type):
+                            if any(re.search(str(pattern), str(eco_type)) for pattern in CorridorScore.CORE.value):
                                 base_factor = DynamicScore.MAXIMUM.value
-                            elif re.search(CorridorScore.TRANSITION.value[1], eco_type):
+                            elif any(re.search(str(pattern), str(eco_type)) for pattern in CorridorScore.TRANSITION.value):
                                 base_factor = DynamicScore.MEDIUM.value
-                            elif re.search(CorridorScore.CORRIDOR.value[1], eco_type):
+                            elif any(re.search(str(pattern), str(eco_type)) for pattern in CorridorScore.CORRIDOR.value):
                                 base_factor = DynamicScore.LOW.value
                             break
+
 
                 # Multiply factor by per-metric score
                 final_score = round(base_factor * per_metric_score)
