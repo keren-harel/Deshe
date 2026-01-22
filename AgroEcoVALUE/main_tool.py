@@ -128,7 +128,7 @@ def calculate_corridor_scores():
                 # Search ECO layer for matching geometry
                 with arcpy.da.SearchCursor(eco_layer, ["SHAPE@", "Type"]) as ecos:
                     for eco_geom, eco_type in ecos:
-                        if eco_geom.contains(geom):
+                        if eco_geom.within(geom):
                             # Assign factor based on corridor type
                             if any(re.search(str(pattern), str(eco_type)) for pattern in CorridorScore.CORE.value):
                                 base_factor = DynamicScore.MAXIMUM.value
