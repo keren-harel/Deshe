@@ -17,7 +17,7 @@ from enum import Enum
 class DynamicScore(Enum):
     MAXIMUM = 1.0      # Full score
     MEDIUM = 0.5       # Half score
-    LOW = 1/3      # One-third score
+    LOW = 1/3       # One-third score
     NONE = 0.0          # No score
 
 class spatialScaleScores(Enum):
@@ -29,22 +29,14 @@ class spatialScaleScores(Enum):
     Natural_Features = 15
     Agricultural_Features = 10
 
-class CorridorScore(Enum):
+class CorridorScore(Enum):  #! <----- צריך לשנות מציון לסוג
     """
     מסדרון אקולוגי ארצי או אזורי
     """
-    CORE = ("ליבה", "יער", "שמורות", "גנים")
+    CORE = ("ליבה", "יער", "שמורות", "גנים", "יערות", "שמורה")
     TRANSITION = ("מעבר", "מעבר הכרחי - צוואר בקבוק", "מעבר אקולוגי",   "מעבר אקולוגי אזורי")
     CORRIDOR = ("מסדרון", "מסדרון אקולוגי ארצי/אזורי", "רצף שטחים פתוחים",  "שטח פתוח רציף")
     NONE = ("", "לא רלוונטי", "לא ידוע", "לא רלונטי", None)
-
-class FloodplainScore(Enum):
-    """
-    פשט הצפה
-    """
-    MAXIMUM = 15  # Parcel is inside floodplain
-    MEDIUM = 8    # Parcel is within max_distance from floodplain
-    LOW = 0       # Parcel is farther than max_distance from floodplain
 
 class NaturalAreaType(Enum):
     """
@@ -52,14 +44,6 @@ class NaturalAreaType(Enum):
     """
     OPEN = ("פתוח", "מוגן")
     AGRICULTURAL = ("חקלאי", "")
-
-class NaturalAreaScore(Enum):
-    """
-    ציון שטח טבעי
-    """
-    MAXIMUM = 15
-    MEDIUM = 8
-    LOW = 0 
 
 class OpenSpaceCorridorType(Enum):
     """
@@ -69,36 +53,12 @@ class OpenSpaceCorridorType(Enum):
     BUFFER = (2, 3)         # ערכיות רצף בינונית-גבוהה
     DISTURBANCE = (0, 1)    # ערכיות רצף נמוכה
 
-class OpenSpaceCorridorScore(Enum):
-    """
-    ציון ערכיות רצף שטחים פתוחים
-    """
-    CORE = 15             # החלקה או חלק ממנה נמצאים בליבה  של רצף שטחים פתוחים
-    BUFFER = 8            # החלקה או חלק ממנה נמצאים באזור חיץ
-    DISTURBANCE = 0       # החלקה או חלק ממנה צמודים להפרה
-
-
-class CoverTypeScore(Enum):
-    """
-    ציון סוג כיסוי קרקע
-    """
-    HIGH = 5
-    LOW = 0
-
 class CoverType(Enum):
     """
     סוג כיסוי קרקע
     """
     OPEN = ("שטח פתוח", "גידולי שדה", "מטעים", "גדש")
     COVER = ("בתי רשת", "מנהרות", "רשת", "כיסוי רשת")
-
-
-class WaterTypeScore(Enum):
-    """
-    ציון סוג השקיה
-    """
-    HIGH = 5      # גידולי בעל ללא השקיה
-    LOW = 0       # גידולים מושקים - שלחין
 
 class WaterType(Enum):
     """

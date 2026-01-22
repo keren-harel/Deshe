@@ -4,9 +4,9 @@ import arcpy
 from datetime import datetime
 import re
 from eco_score_enum import (
-    CorridorScore, FloodplainScore, NaturalAreaType, DynamicScore,
-    OpenSpaceCorridorType, OpenSpaceCorridorScore, CoverTypeScore, CoverType,
-    WaterTypeScore, WaterType, spatialScaleScores
+    CorridorScore, NaturalAreaType, DynamicScore,
+    OpenSpaceCorridorType, CoverType,
+    WaterType, spatialScaleScores
 )
 
 # -------------------------------
@@ -136,7 +136,8 @@ def calculate_corridor_scores():
                                 base_factor = DynamicScore.MEDIUM.value
                             elif any(re.search(str(pattern), str(eco_type)) for pattern in CorridorScore.CORRIDOR.value):
                                 base_factor = DynamicScore.LOW.value
-                            break
+                            else:
+                                add_warning(oid, f"CorridorScore: eco_type '{eco_type}'. Assigned 0 score.")
 
 
                 # Multiply factor by per-metric score
@@ -168,20 +169,23 @@ def calculate_floodplain_scores():
 
                 with arcpy.da.SearchCursor(floodplain_layer, ["SHAPE@"]) as floods:
                     for (flood_geom,) in floods:
-                        if geom.overlaps(flood_geom) or geom.within(flood_geom) or flood_geom.within(geom):
+                        distance = geom.distanceTo(flood_geom)
+                        
+                        if min_distance is None or distance < min_distance:
+                            min_distance = distance
+
+                        if distance == 0:
                             intersection = geom.intersect(flood_geom, 4)
                             if intersection.area > 0:
                                 overlap_ratio = intersection.area / geom.area
                                 max_overlap_ratio = max(max_overlap_ratio, overlap_ratio)
-                            distance = geom.distanceTo(flood_geom)
-                            if min_distance is None or distance < min_distance:
-                                min_distance = distance
 
                 # Determine factor based on overlap and distance
                 if max_overlap_ratio >= overlap_threshold:
                     factor = DynamicScore.MAXIMUM.value
-                    if max_overlap_ratio < 0.95:
-                        add_warning(oid, f"FloodplainScore: {min_distance:.1f} m from floodplain; max overlap = {max_overlap_ratio:.2%}")
+                    if max_overlap_ratio < 0.2:
+
+                        add_warning(oid, f"FloodplainScore: max overlap = {max_overlap_ratio:.2%}")
                 elif min_distance is not None and float(max_distance) and min_distance <= float(max_distance):
                     factor = DynamicScore.MEDIUM.value
                 else:
