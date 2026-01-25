@@ -44,10 +44,14 @@ totalCoverageExcel = os.path.join(input_configurationFolder, 'TotalCoverage.xlsx
 #GDB that contains all the domains needed.
 origin_GDB = os.path.join(input_configurationFolder, 'origin.gdb')
 origin_GDB_domains = arcpy.Describe(origin_GDB).domains
-#Import JSON file
+#Import JSON files
 speciesHierarchy_path = os.path.join(input_configurationFolder, 'speciesHierarchy.json')
 with open(speciesHierarchy_path, encoding='utf-8') as f:
     speciesHierarchy_jsonObject = json.load(f)
+
+invasiveSpecies_path = os.path.join(input_configurationFolder, 'invasiveSpecies.json')
+with open(invasiveSpecies_path, 'r', encoding='utf-8') as f:
+    invasiveSpecies_list = json.load(f)['invasiveSpecies']
 
 sekerpoints_tables_relationships = {
     #'nickname': ('name of relationship class', field codes prefix <int>),
@@ -130,7 +134,7 @@ layerCover_table1 = {
             "פזור (10%-3%)": (2, 7, 10),
             "פתוח (33%-10%)": (3, 22, 33),
             "בינוני (66%-33%)": (4, 50, 66),
-            "גבוה (מעל 66%)": (5, 88, 100),
+            "גבוה (מעל 66%)": (5, 83, 100),
         }
 layerCover_table1_backwardsList = [(v[2],k) for k,v in layerCover_table1.items()]
 
@@ -3587,7 +3591,7 @@ class StandPolygon(FcRow):
             "מועט (10%-3%)": (7, 10),
             "בינוני (33%-10%)": (22, 33),
             "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
+            "גבוה מאוד (מעל 66%)": (83, 100),
         }
         #backwardsList for toCategory function.
         #(maxVal of category, category name)
@@ -3633,7 +3637,7 @@ class StandPolygon(FcRow):
             "מועט (10%-3%)": (7, 10),
             "בינוני (33%-10%)": (22, 33),
             "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
+            "גבוה מאוד (מעל 66%)": (83, 100),
         }
         #backwardsList for toCategory function.
         #(maxVal of category, category name)
@@ -3692,7 +3696,7 @@ class StandPolygon(FcRow):
             "מועט (10%-3%)": (7, 10),
             "בינוני (33%-10%)": (22, 33),
             "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
+            "גבוה מאוד (מעל 66%)": (83, 100),
         }
         #backwardsList for toCategory function.
         #(maxVal of category, category name)
@@ -3784,34 +3788,8 @@ class StandPolygon(FcRow):
         stepName = 'invasive species'
         #invasivespecies is the dict to be returned
         invasivespecies = {}
-        #A list of valid values for invasive species:
-        invasiveSpecies_codedValues = [
-            None,
-            "אין",
-            "אזדרכת מצויה",
-            "אילנתה בלוטית",
-            "אמברוסיה מכונסת (ומינים נוספים)",
-            "דודוניאה דביקה",
-            "חמציץ נטוי",
-            "חסת המים",
-            "טטרקליניס מפריק",
-            "טיונית החולות",
-            "ינבוט המסקיטו יוליפלורה",
-            "כסייה סטורטי",
-            "לנטנה ססגונית",
-            "פולובניית פורטון (פאולינה)",
-            "פלפלון בכות",
-            "פלפלון דמוי-אלה",
-            "פרקנסוניה שיכנית",
-            "צחר כחלחל",
-            "שיטה ויקטוריה",
-            "שיטה כחלחלה",
-            "שיטה סליצינה (עלי ערבה)",
-            "קיקיון מצוי",
-            "אחר (פרט בהערות)",
-        ]
-        #indexes to ignore: None, "אין", "אחר"
-        invasiveSpecies_indexesToOmit = [0, 1, len(invasiveSpecies_codedValues)-1]
+        #values to ignore: None, "אין", "אחר"
+        invasiveSpecies_valuesToOmit = invasiveSpecies_list[:3]
         #A dict of {invasive species <str>: [epicenter type INDEX <int>, ...], ...}
         invasiveSpecies_indexLists = {}
         #An ascending sorted epicenter type list:
@@ -3832,21 +3810,16 @@ class StandPolygon(FcRow):
                 epicenter = tup[1]
                 #Two conditions for validity of values:
                 validity_conditions = [
-                    species in invasiveSpecies_codedValues,
+                    species in invasiveSpecies_list,
                     epicenter in epicenterType_codedValues
                 ]
-                if False in validity_conditions:
-                    #Values are not valid, add warning and skip.
-                    txt = "Point %s: %s. Invalid value: (%s, %s)." % (point.FC.oidFieldName, point.id, species, epicenter)
-                    self.notifier.add(stepName, 'warning', txt)
-                    continue
-                else:
-                    #values are valid, convert to index, check if index
-                    #should be omitted, if not - append to invasiveSpecies_indexLists.
-                    species_index = invasiveSpecies_codedValues.index(species)
+                if all(validity_conditions):
+                    # values are valid, convert to index
+                    # check if value should be omitted, if not - append to invasiveSpecies_indexLists.
+                    species_om = species in invasiveSpecies_valuesToOmit
                     epicenter_index = epicenterType_codedValues.index(epicenter)
-                    if (species_index in invasiveSpecies_indexesToOmit) or \
-                        (epicenter_index in epicenterType_indexesToOmit):
+                    epicenter_om = epicenter_index in epicenterType_indexesToOmit
+                    if species_om or epicenter_om:
                         continue
                     #Values are valid and wanted → append accordingly:
                     if species in invasiveSpecies_indexLists.keys():
@@ -3855,6 +3828,12 @@ class StandPolygon(FcRow):
                     else:
                         #create a new "species" entry:
                         invasiveSpecies_indexLists[species] = [epicenter_index]
+                else:
+                    #Values are not valid, add warning and skip.
+                    txt = "Point %s: %s. Invalid value: (%s, %s)." % (point.FC.oidFieldName, point.id, species, epicenter)
+                    self.notifier.add(stepName, 'warning', txt)
+                    continue
+                    
         #End of appending epicenter indexes to lists.
 
         #For every key (invasive species) in invasiveSpecies_indexLists,
@@ -4141,7 +4120,7 @@ class StandPolygon(FcRow):
             "מועט (10%-3%)": (7, 10),
             "בינוני (33%-10%)": (22, 33),
             "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
+            "גבוה מאוד (מעל 66%)": (83, 100),
         }
         defaultValue = "אין"
         backwardsList = [(v[1],k) for k,v in domainValues.items()]

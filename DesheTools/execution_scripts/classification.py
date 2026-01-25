@@ -102,7 +102,7 @@ layerCover_table1 = {
             "פזור (10%-3%)": (2, 7, 10),
             "פתוח (33%-10%)": (3, 22, 33),
             "בינוני (66%-33%)": (4, 50, 66),
-            "גבוה (מעל 66%)": (5, 88, 100),
+            "גבוה (מעל 66%)": (5, 83, 100),
         }
 layerCover_table1_backwardsList = [(v[2],k) for k,v in layerCover_table1.items()]
 
@@ -1973,7 +1973,7 @@ class SekerPoint(FcRow):
             "מועט (10%-3%)": (7, 10),
             "בינוני (33%-10%)": (22, 33),
             "גבוה (66%-33%)": (50, 66),
-            "גבוה מאוד (מעל 66%)": (88, 100),
+            "גבוה מאוד (מעל 66%)": (83, 100),
         }
         #backwardsList for toCategory function.
         #(maxVal of category, category name)
