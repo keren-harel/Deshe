@@ -3890,50 +3890,27 @@ class StandPolygon(FcRow):
         else: return "אין"
         """
         rawValues = self.getRelatedValues('sp', 40063)
-        domainValues = [
-            None,
-            "אין",
-            "מינים בסכנת הכחדה",
-            "ריכוז מינים מוגנים",
-            "עצים או שיחי תפארת",
-            "בית-גידול לח",
-            "אתרי קינון",
-            "מצוקים",
-            "מאורות יונקים",
-            "נוכחות צבאים",
-            "ערכי טבע דוממים",
-            "מטע או בוסתן עזוב",
-            "אחר",
-        ]
-        defaultValue = domainValues[1] #'אין'
-        elseValue = domainValues[12] #'אחר'
+        defaultValue = "אין"
+        elseValue = "אחר"
         resultsDict = {
             'main': defaultValue,
             'details': None
         }
+        
+        #values to be removed:
+        for valueToRemove in [None, elseValue]:
+            while valueToRemove in rawValues:
+                rawValues.remove(valueToRemove)
+        validValues = rawValues
 
-        #make sure all values are valid:
-        validValues = []
-        for rawValue in rawValues:
-            if rawValue in domainValues:
-                validValues.append(rawValue)
-        
-        #convert to indexes:
-        indexList = [domainValues.index(validValue) for validValue in validValues]
-        #indexes to be removed:
-        for indexToRemove in [0, 1]:
-            while indexToRemove in indexList:
-                indexList.remove(indexToRemove)
-        
         #logic:
-        if indexList:
+        if validValues:
             #sort by frequency, remove duplications.
-            indexList_sorted = freqSorted(indexList)
+            validValues_sorted = freqSorted(validValues)
             #convert indexes back to values:
-            valList = [domainValues[i] for i in indexList_sorted]
-            if elseValue in valList:
+            if elseValue in validValues_sorted:
                 #1) move elseValue to end (if exists)
-                valList = makeLast(valList, elseValue)
+                validValues_sorted = makeLast(validValues_sorted, elseValue)
                 #2) copy free text from the details field
                 detailsList = self.getRelatedValues('sp', 40092)
                 detailsList = removeDup(detailsList)
@@ -3944,10 +3921,10 @@ class StandPolygon(FcRow):
                     # concatenate using "; "
                     resultsDict['details'] = '; '.join(detailsList)
             #remove default value if it exists along with other values
-            if (defaultValue in valList) and (len(valList)>1):
-                valList.remove(defaultValue)
+            if (defaultValue in validValues_sorted) and (len(validValues_sorted)>1):
+                validValues_sorted.remove(defaultValue)
             #concatenate:
-            resultsDict['main'] = ",".join(valList)
+            resultsDict['main'] = ",".join(validValues_sorted)
             return resultsDict
         else:
             #list is empty, return defaultValue
