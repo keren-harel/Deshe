@@ -2862,9 +2862,8 @@ class SubForestLayer(Layer):
         #Convert presenceConifer to index based on domain,
         #obtain threshold based on presenceConiferType.
         presenceConiferType = self.presenceConiferType
-        if 'נטיעה' in presenceConiferType:
-            # if it contains NETIA, it is considered as NETIA
-            # even if it contains other values.
+        if all(key in presenceConiferType for key in presenceConifer_threshold.keys()):
+            # if it contains all the keys, it is considered as NETIA
             presenceConiferType = 'נטיעה'
         index = presenceConifer_domain.index(self.presenceConifer)
         if presenceConiferType in presenceConifer_threshold.keys():
@@ -2878,10 +2877,10 @@ class SubForestLayer(Layer):
         #Convert presenceBroadLeaf to index based on domain,
         #obtain threshold based on presenceBroadLeafType.
         presenceBroadLeafType = self.presenceBroadLeafType
-        if 'נטיעה' in self.presenceBroadLeafType:
-            # if it contains NETIA, it is considered as NETIA
-            # even if it contains other values.
+        if all(key in presenceBroadLeafType for key in presenceBroadleaf_threshold.keys()):
+            # if it contains all the keys, it is considered as NETIA
             presenceBroadLeafType = 'נטיעה'
+        presenceBroadLeafType = self.presenceBroadLeafType
         index = presenceBroadleaf_domain.index(self.presenceBroadLeaf)
         if presenceBroadLeafType in presenceBroadleaf_threshold.keys():
             threshold = presenceBroadleaf_threshold[presenceBroadLeafType]
