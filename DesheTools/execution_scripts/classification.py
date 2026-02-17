@@ -2861,9 +2861,14 @@ class SubForestLayer(Layer):
         #Returns True if sub forest conifer forest meets criteria.
         #Convert presenceConifer to index based on domain,
         #obtain threshold based on presenceConiferType.
+        presenceConiferType = self.presenceConiferType
+        if 'נטיעה' in presenceConiferType:
+            # if it contains NETIA, it is considered as NETIA
+            # even if it contains other values.
+            presenceConiferType = 'נטיעה'
         index = presenceConifer_domain.index(self.presenceConifer)
-        if self.presenceConiferType in presenceConifer_threshold.keys():
-            threshold = presenceConifer_threshold[self.presenceConiferType]
+        if presenceConiferType in presenceConifer_threshold.keys():
+            threshold = presenceConifer_threshold[presenceConiferType]
             return index >= threshold
         else:
             return False
@@ -2872,9 +2877,14 @@ class SubForestLayer(Layer):
         #Returns True if sub forest broadleaf forest meets criteria.
         #Convert presenceBroadLeaf to index based on domain,
         #obtain threshold based on presenceBroadLeafType.
+        presenceBroadLeafType = self.presenceBroadLeafType
+        if 'נטיעה' in self.presenceBroadLeafType:
+            # if it contains NETIA, it is considered as NETIA
+            # even if it contains other values.
+            presenceBroadLeafType = 'נטיעה'
         index = presenceBroadleaf_domain.index(self.presenceBroadLeaf)
-        if self.presenceBroadLeafType in presenceBroadleaf_threshold.keys():
-            threshold = presenceBroadleaf_threshold[self.presenceBroadLeafType]
+        if presenceBroadLeafType in presenceBroadleaf_threshold.keys():
+            threshold = presenceBroadleaf_threshold[presenceBroadLeafType]
             return index >= threshold
         else:
             return False
