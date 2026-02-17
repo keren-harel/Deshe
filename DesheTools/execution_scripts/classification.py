@@ -1564,8 +1564,8 @@ class SekerPoint(FcRow):
             ]
             isLowForest = primaryLayer.vegForm in lowForest_options
 
-            if isLowForest:
-                planttype = {k:v for k,v in self.planttype.items()}
+            if not isLowForest:
+                planttype = self.planttype.copy() #non-referenced copy
                 if planttype['צומח_גדות_נחלים'] >= 30:
                     covtype = 'צומח_גדות_נחלים'
                 else:
