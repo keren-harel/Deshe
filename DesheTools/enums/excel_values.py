@@ -19,3 +19,4 @@ class LayerNameExcel(Enum):
     SURVEY_POINTS = "survey_points"
     KKL_LINE_REMARKS_ONLINE_TEMPLATE = "kkl_line_remarks_online_template"
     LINE_REMARKS_DISCUSSION_2 = "line_remarks_discussion_2"
+    LINE_REMARKS_DESHE = "line_remarks_deshe"
