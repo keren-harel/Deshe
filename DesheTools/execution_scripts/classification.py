@@ -13,11 +13,11 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.12.09 - new form\b44cdcc4-c6f0-4950-b98b-2228b25cbaf6.gdb'
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_2026_forDedi')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.02.18\smy_Kfar_HaHoresh_BKP_161225.gdb'
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
-    input_beitGidul = "צחיח-למחצה" #ים-תיכוני
+    input_beitGidul = "ים-תיכוני"
 else:
     input_sekerpoints = arcpy.GetParameter(0)
     #Take all the features, even if layar has selection.
@@ -1564,8 +1564,8 @@ class SekerPoint(FcRow):
             ]
             isLowForest = primaryLayer.vegForm in lowForest_options
 
-            if isLowForest:
-                planttype = {k:v for k,v in self.planttype.items()}
+            if not isLowForest:
+                planttype = self.planttype.copy() #non-referenced copy
                 if planttype['צומח_גדות_נחלים'] >= 30:
                     covtype = 'צומח_גדות_נחלים'
                 else:
@@ -2861,9 +2861,15 @@ class SubForestLayer(Layer):
         #Returns True if sub forest conifer forest meets criteria.
         #Convert presenceConifer to index based on domain,
         #obtain threshold based on presenceConiferType.
+        presenceConiferType = self.presenceConiferType
+        if presenceConiferType is None:
+            return False
+        if all(key in presenceConiferType for key in presenceConifer_threshold.keys()):
+            # if it contains all the keys, it is considered as NETIA
+            presenceConiferType = 'נטיעה'
         index = presenceConifer_domain.index(self.presenceConifer)
-        if self.presenceConiferType in presenceConifer_threshold.keys():
-            threshold = presenceConifer_threshold[self.presenceConiferType]
+        if presenceConiferType in presenceConifer_threshold.keys():
+            threshold = presenceConifer_threshold[presenceConiferType]
             return index >= threshold
         else:
             return False
@@ -2872,9 +2878,16 @@ class SubForestLayer(Layer):
         #Returns True if sub forest broadleaf forest meets criteria.
         #Convert presenceBroadLeaf to index based on domain,
         #obtain threshold based on presenceBroadLeafType.
+        presenceBroadLeafType = self.presenceBroadLeafType
+        if presenceBroadLeafType is None:
+            return False
+        if all(key in presenceBroadLeafType for key in presenceBroadleaf_threshold.keys()):
+            # if it contains all the keys, it is considered as NETIA
+            presenceBroadLeafType = 'נטיעה'
+        presenceBroadLeafType = self.presenceBroadLeafType
         index = presenceBroadleaf_domain.index(self.presenceBroadLeaf)
-        if self.presenceBroadLeafType in presenceBroadleaf_threshold.keys():
-            threshold = presenceBroadleaf_threshold[self.presenceBroadLeafType]
+        if presenceBroadLeafType in presenceBroadleaf_threshold.keys():
+            threshold = presenceBroadleaf_threshold[presenceBroadLeafType]
             return index >= threshold
         else:
             return False

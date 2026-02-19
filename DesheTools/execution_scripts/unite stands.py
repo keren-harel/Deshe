@@ -5115,8 +5115,8 @@ class PoductPolygon(FcRow):
             ]
             isLowForest = primaryLayer.vegForm in lowForest_options
 
-            if isLowForest:
-                planttype = {k:v for k,v in self.v__planttype.items()}
+            if not isLowForest:
+                planttype = self.v__planttype.copy()
                 if planttype['צומח_גדות_נחלים'] >= 30:
                     covtype = 'צומח_גדות_נחלים'
                 else:
