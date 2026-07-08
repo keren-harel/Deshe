@@ -11,9 +11,9 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Galed')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.06.04\KfarHaHoresh_1102_verification.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1102_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -2913,10 +2913,13 @@ class StandPolygon(FcRow):
         omits undesired values, and returns the ceil(average()) of values.
         If after omission the list is empty → returns None.
         Stand density result could be affected by general density in two ways:
-        1) If general density is 'אין עצים' / 'לא רלוונטי':
-            → notify and return an identical value.
+        #@UPDATE DETAILS...
+        1) If general density is 'אין עצים' / 'לא רלוונטי' ~OR~ stand density <= general density:
+            → return an average of stand density (צפיפות שכבה ראשית)
         2) If general density < stand density:
-            → nofity and return stand density.
+            → nofity and return general density.
+        3) Else
+            → return None.
         """
         #domainValues - every possible result from the field sorted.
         domainValues = [
@@ -2932,36 +2935,31 @@ class StandPolygon(FcRow):
         ]
 
         stepName = 'standdensity'
+
         generalDensity_index = domainValues.index(generalDensity)
+        standDensity_rawValues = self.getRelatedValues('sp', 40021)
 
-        #Check 1 (see method description):
-        if generalDensity in [domainValues[1], domainValues[2]]:
-            #txt = 'stand density was auto-assigned to be as general density (%s).'\
-            #% generalDensity
-            #self.notifier.add(stepName, 'warning', txt)
+        #calculate stand density (average of points' 40021):
+        standDensity_indexList = [domainValues.index(rv) for rv in standDensity_rawValues]
+        for indexToRemove in [0, 1]: #(לא רלוונטי or None)
+            while indexToRemove in standDensity_indexList:
+                standDensity_indexList.remove(indexToRemove)
+        if standDensity_indexList:
+            standDensity_index = math.ceil(average(standDensity_indexList))
+        else:
+            standDensity_index = 0
+        
+        # LOGIC
+        if generalDensity in domainValues[1:3] or standDensity_index <= generalDensity_index:
+            return domainValues[standDensity_index]
+        elif standDensity_index > generalDensity_index:
+            txt = 'stand density > general density. stand density was auto-assigned to be as general density (%s).'\
+            % generalDensity
+            self.notifier.add(stepName, 'warning', txt)
             return generalDensity
-
-
-        rawValues = self.getRelatedValues('sp', 40021)
-        
-        indexList = [domainValues.index(rv) for rv in rawValues]
-        #indexes to be removed: לא רלוונטי or None
-        for indexToRemove in [0, 1]:
-            while indexToRemove in indexList:
-                indexList.remove(indexToRemove)
-        
-        if len(indexList) > 0:
-            chosenIndex = math.ceil(average(indexList))
-            #Check 2 (see method description):
-            if chosenIndex <= generalDensity_index:
-                return domainValues[chosenIndex]
-            else:
-                txt = 'stand density > general density. stand density was auto-assigned to be as general density (%s).'\
-                % generalDensity
-                self.notifier.add(stepName, 'warning', txt)
-                return generalDensity
         else:
             return None
+
 
     def c__coniferforestage(self):
         """
@@ -5683,7 +5681,7 @@ counter = 1
 
 stands_uc = arcpy.UpdateCursor(
     org.stands.name,
-    #where_clause = 'OBJECTID IN (67, 168, 331, 369, 268)', #for debug!!!
+    #where_clause = 'OBJECTID IN (16, 57, 107, 201, 213, 216, 242, 251, 252, 253)', #for debug!!!
     sort_fields = "%s A" % org.stands.oidFieldName
     )
 #Main iteration:
