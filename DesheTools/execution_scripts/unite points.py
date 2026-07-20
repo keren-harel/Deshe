@@ -3429,6 +3429,9 @@ class StandPolygon(FcRow):
                             warningMessage = "Species code '%s' wasn't found in species list. point id: %s." % (x, point_id)
                             arcpy.AddWarning(warningMessage)
                             continue
+                    elif x == '':
+                        #empty string, skip.
+                        continue
                     else:
                         warningMessage = "Species code '%s' failed to be turned into an integer. point id: %s." % (x, point_id)
                         arcpy.AddWarning(warningMessage)
@@ -3600,7 +3603,7 @@ class StandPolygon(FcRow):
         for rawValue in rawValues:
             if rawValue in domainValues.keys():
                 validValues.append(rawValue)
-            elif rawValue is None:
+            elif rawValue in [None, '']:
                 #A notification is not necessary.
                 continue
             else:
