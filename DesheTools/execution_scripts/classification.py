@@ -1198,8 +1198,13 @@ class SekerPoint(FcRow):
                 '4': 'שטח מבונה'
             }
             self.writeSelf(
-                [40111, 40110, 40024, 40034, 40044, 40104],
-                [speciesComposition_dict[self.standtype]] + ['לא יער']*5
+                [
+                    40111,
+                    40110, 40024, 40034, 40044, 40104,
+                    40020, 40021,
+                    #@section-43
+                ],
+                [speciesComposition_dict[self.standtype]] + ['לא יער']*5 + ['אין עצים']*2
             )
             # method ends here for stand types 3 and 4.
             return
