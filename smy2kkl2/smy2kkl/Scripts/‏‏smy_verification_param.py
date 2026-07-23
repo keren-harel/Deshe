@@ -137,7 +137,7 @@ if __name__=='__main__':
         else:
             missing_tables = "\n".join(diff)
             arcpy.AddMessage ('\tPoint related tables are missing:')
-            arcpy.AddMessage ( '\t', missing_tables)   
+            arcpy.AddMessage(f'\t{missing_tables}')
 
         # 2. Stands layer
         stands_layers =  arcpy.ListFeatureClasses('stand*', 'POLYGONS')
@@ -173,7 +173,7 @@ if __name__=='__main__':
         else:
             tt = "\n".join([f'{stands}_{t}' for t in diff])
             arcpy.AddWarning ('\tThese Stands related tables are missing:')
-            arcpy.AddWarning ('\t', tt)
+            arcpy.AddWarning (f'\t{tt}')
             
         # 3. Reletionship classes
         rc_names = [
