@@ -13,8 +13,8 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.02.18\smy_Kfar_HaHoresh_BKP_161225.gdb'
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.07.28\smy_Guvrin_forProduct.gdb'
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Guvrin')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -1211,6 +1211,7 @@ class SekerPoint(FcRow):
                 40020: 'אין עצים',
                 40021: 'אין עצים'
             }
+            # convert to lists:
             row_fieldIDs = []
             row_values = []
             for fieldCode, value in row_values_d.items():
