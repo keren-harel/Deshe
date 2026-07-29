@@ -11,9 +11,9 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2025.10.16\smy_survey_Galed_BKP_070125_before_Unitestands.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_3402_fnl')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Galed')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.06.04\KfarHaHoresh_1102_verification.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_1102_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -1384,6 +1384,8 @@ class StandPolygon(FcRow):
         self.validateStandDuplication()
         self.points = self.getPoints(self.FC.relationships['sp'])
         self.N_points = len(self.points)
+        #Check if points' speciesComposition is 'חקלאות' / 'שטח מבונה'
+        self.agriOrBuilt = self.checkAgriOrBuilt()
 
         self.calculateAndWrite()
         self.notifier.write()
@@ -1579,6 +1581,31 @@ class StandPolygon(FcRow):
         else:
             return False
 
+    def checkAgriOrBuilt(self):
+        """
+        Returns value of 40111 if:
+        - N_points == 1, and
+        - point's 40111 == 'חקלאות' or 'שטח מבונה'
+        If 'חקלאות' or 'שטח מבונה' and N_points > 1 - add a warning to the notifier.
+        """
+        stepName = 'checkAgriOrBuilt'
+        possibleValues = ['חקלאות', 'שטח מבונה']
+        values = self.getRelatedValues('sp', 40111)
+        # intersection of values that appear in both lists:
+        common_values = list(set(values) & set(possibleValues))
+        if common_values:
+            if self.N_points == 1:
+                # return the first and only value
+                return common_values[0]
+            else:
+                # more than one point in this stand.
+                # add warning.
+                txt = f'Stand has point\\s with {common_values} in field {fieldsDict[40111].alias}, but has more than ONE seker point.'
+                self.notifier.add(stepName, 'warning', txt)
+                return None
+        else:
+            return None
+
     def calculateAndWrite(self):
         """
         A module that runs calculation methods (c__...) and
@@ -1589,6 +1616,31 @@ class StandPolygon(FcRow):
         The following attributes with the prefix "v__" for VALUE of calculations.
         The rest of the name, after the prefix, after the field name.
         """
+        # SPECIAL CASE - agriculture or built area
+        if self.agriOrBuilt:
+            # write values and finish this row.
+            row_values_d= {
+                50039: self.agriOrBuilt, # 'חקלאות' or 'שטח מבונה'
+                50038: {'חקלאות': '9992', 'שטח מבונה': '9993'}.get(self.agriOrBuilt),
+                50030: 'לא יער',
+                50037: 'לא יער',
+                50045: 'לא רלוונטי',
+                50042: 'אין עצים',
+                50043: 'אין עצים',
+                50046: None,
+                50050: None,
+                50054: None,
+            }
+            # convert to lists:
+            row_fieldIDs = []
+            row_values = []
+            for fieldCode, value in row_values_d.items():
+                row_fieldIDs.append(fieldCode)
+                row_values.append(value)
+            self.writeSelf(row_fieldIDs, row_values)
+            # method ends here, no further calculations needed for this stand.
+            return
+        
         #a variable for order:
         self.forestlayerVegform_calculated = False
         
@@ -2913,10 +2965,13 @@ class StandPolygon(FcRow):
         omits undesired values, and returns the ceil(average()) of values.
         If after omission the list is empty → returns None.
         Stand density result could be affected by general density in two ways:
-        1) If general density is 'אין עצים' / 'לא רלוונטי':
-            → notify and return an identical value.
+        #@UPDATE DETAILS...
+        1) If general density is 'אין עצים' / 'לא רלוונטי' ~OR~ stand density <= general density:
+            → return an average of stand density (צפיפות שכבה ראשית)
         2) If general density < stand density:
-            → nofity and return stand density.
+            → nofity and return general density.
+        3) Else
+            → return None.
         """
         #domainValues - every possible result from the field sorted.
         domainValues = [
@@ -2932,36 +2987,31 @@ class StandPolygon(FcRow):
         ]
 
         stepName = 'standdensity'
+
         generalDensity_index = domainValues.index(generalDensity)
+        standDensity_rawValues = self.getRelatedValues('sp', 40021)
 
-        #Check 1 (see method description):
-        if generalDensity in [domainValues[1], domainValues[2]]:
-            #txt = 'stand density was auto-assigned to be as general density (%s).'\
-            #% generalDensity
-            #self.notifier.add(stepName, 'warning', txt)
+        #calculate stand density (average of points' 40021):
+        standDensity_indexList = [domainValues.index(rv) for rv in standDensity_rawValues]
+        for indexToRemove in [0, 1]: #(לא רלוונטי or None)
+            while indexToRemove in standDensity_indexList:
+                standDensity_indexList.remove(indexToRemove)
+        if standDensity_indexList:
+            standDensity_index = math.ceil(average(standDensity_indexList))
+        else:
+            standDensity_index = 0
+        
+        # LOGIC
+        if generalDensity in domainValues[1:3] or standDensity_index <= generalDensity_index:
+            return domainValues[standDensity_index]
+        elif standDensity_index > generalDensity_index:
+            txt = 'stand density > general density. stand density was auto-assigned to be as general density (%s).'\
+            % generalDensity
+            self.notifier.add(stepName, 'warning', txt)
             return generalDensity
-
-
-        rawValues = self.getRelatedValues('sp', 40021)
-        
-        indexList = [domainValues.index(rv) for rv in rawValues]
-        #indexes to be removed: לא רלוונטי or None
-        for indexToRemove in [0, 1]:
-            while indexToRemove in indexList:
-                indexList.remove(indexToRemove)
-        
-        if len(indexList) > 0:
-            chosenIndex = math.ceil(average(indexList))
-            #Check 2 (see method description):
-            if chosenIndex <= generalDensity_index:
-                return domainValues[chosenIndex]
-            else:
-                txt = 'stand density > general density. stand density was auto-assigned to be as general density (%s).'\
-                % generalDensity
-                self.notifier.add(stepName, 'warning', txt)
-                return generalDensity
         else:
             return None
+
 
     def c__coniferforestage(self):
         """
@@ -3431,6 +3481,9 @@ class StandPolygon(FcRow):
                             warningMessage = "Species code '%s' wasn't found in species list. point id: %s." % (x, point_id)
                             arcpy.AddWarning(warningMessage)
                             continue
+                    elif x == '':
+                        #empty string, skip.
+                        continue
                     else:
                         warningMessage = "Species code '%s' failed to be turned into an integer. point id: %s." % (x, point_id)
                         arcpy.AddWarning(warningMessage)
@@ -3602,7 +3655,7 @@ class StandPolygon(FcRow):
         for rawValue in rawValues:
             if rawValue in domainValues.keys():
                 validValues.append(rawValue)
-            elif rawValue is None:
+            elif rawValue in [None, '']:
                 #A notification is not necessary.
                 continue
             else:
@@ -5683,7 +5736,7 @@ counter = 1
 
 stands_uc = arcpy.UpdateCursor(
     org.stands.name,
-    #where_clause = 'OBJECTID IN (67, 168, 331, 369, 268)', #for debug!!!
+    #where_clause = 'OBJECTID IN (16, 57, 107, 201, 213, 216, 242, 251, 252, 253)', #for debug!!!
     sort_fields = "%s A" % org.stands.oidFieldName
     )
 #Main iteration:

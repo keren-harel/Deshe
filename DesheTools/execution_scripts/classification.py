@@ -13,8 +13,8 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.02.18\smy_Kfar_HaHoresh_BKP_161225.gdb'
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.07.28\smy_Guvrin_forProduct.gdb'
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Guvrin')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -1197,10 +1197,43 @@ class SekerPoint(FcRow):
                 '3': 'חקלאות',
                 '4': 'שטח מבונה'
             }
-            self.writeSelf(
-                [40111, 40110, 40024, 40034, 40044, 40104],
-                [speciesComposition_dict[self.standtype]] + ['לא יער']*5
-            )
+            # write values accordingly:
+            # self values:
+            row_values_d= {
+                40111: speciesComposition_dict.get(self.standtype),
+                40110: 'לא יער',
+                40124: 'לא יער',
+                40022: 'לא רלוונטי',
+                40024: 'לא יער', #@ waiting for clarification from  yoav (#43)
+                40034: 'לא יער', #@ -"-
+                40044: 'לא יער', #@ -"-
+                40104: 'לא יער', #@ -"-
+                40020: 'אין עצים',
+                40021: 'אין עצים'
+            }
+            # convert to lists:
+            row_fieldIDs = []
+            row_values = []
+            for fieldCode, value in row_values_d.items():
+                row_fieldIDs.append(fieldCode)
+                row_values.append(value)
+            self.writeSelf(row_fieldIDs, row_values)
+
+            # related table values:
+            row_values_d = {
+                'pt3': {
+                    43005: speciesComposition_dict.get(self.standtype),
+                    43006: 10
+                }
+            }
+            for relNickname, fieldValues in row_values_d.items():
+                fieldIDs = []
+                values = []
+                for fieldCode, value in fieldValues.items():
+                    fieldIDs.append(fieldCode)
+                    values.append(value)
+                self.writeRelated(relNickname, fieldIDs, values)
+
             # method ends here for stand types 3 and 4.
             return
 
