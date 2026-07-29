@@ -2124,7 +2124,7 @@ class StandPolygon(FcRow):
                 elif lowForest_boolList == [True, False]:
                     vegForm = 'יער מחטני נמוך'
                 elif lowForest_boolList == [False, True]:
-                    vegForm = 'יער רחבי עלים נמוך'
+                    vegForm = 'יער רחבי-עלים נמוך'
                 #Cover based on 'עצים'. Not lower than 'פזור', hence 4+ .
                 percent = max([planttype['עצים'], 4])
                 cover = toCategory(percent, layerCover_table1_backwardsList)
@@ -2220,7 +2220,7 @@ class StandPolygon(FcRow):
                 vegForm = 'יער מחטני נמוך'
                 return vegForm
             elif lowForest_boolList == [False, True]:
-                vegForm = 'יער רחבי עלים נמוך'
+                vegForm = 'יער רחבי-עלים נמוך'
                 return vegForm
         elif planttype['צומח_גדות_נחלים'] >= 30:
             percent = planttype['צומח_גדות_נחלים']
@@ -2562,7 +2562,7 @@ class StandPolygon(FcRow):
             lowForest_options = [
                 'יער מעורב נמוך',
                 'יער מחטני נמוך',
-                'יער רחבי עלים נמוך'
+                'יער רחבי-עלים נמוך'
             ]
             isLowForest = primaryLayer.vegForm in lowForest_options
 
