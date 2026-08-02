@@ -1166,16 +1166,16 @@ class SekerPoint(FcRow):
             self.importSpecies()
             self.planttype = self.importPlantType()
 
-        #Construct layers
-        self.layers = {
-            'tmira': ForestLayer(self, 4),
-            'high': ForestLayer(self, 3),
-            'mid': ForestLayer(self, 2),
-            'sub': SubForestLayer(self)
-        }
-        
-        self.validateRelatedRows()
-        self.validate()
+            #Construct layers
+            self.layers = {
+                'tmira': ForestLayer(self, 4),
+                'high': ForestLayer(self, 3),
+                'mid': ForestLayer(self, 2),
+                'sub': SubForestLayer(self)
+            }
+            
+            self.validateRelatedRows()
+            self.validate()
 
         self.calculateAndWrite()
         self.notifier.write()
@@ -1193,47 +1193,7 @@ class SekerPoint(FcRow):
         
         #0)SPECIAL CASE - STAND TYPES 3 AND 4:
         if self.standtype in ['3','4']:
-            speciesComposition_dict = {
-                '3': 'חקלאות',
-                '4': 'שטח מבונה'
-            }
-            # write values accordingly:
-            # self values:
-            row_values_d= {
-                40111: speciesComposition_dict.get(self.standtype),
-                40110: 'לא יער',
-                40124: 'לא יער',
-                40022: 'לא רלוונטי',
-                40024: 'לא יער', #@ waiting for clarification from  yoav (#43)
-                40034: 'לא יער', #@ -"-
-                40044: 'לא יער', #@ -"-
-                40104: 'לא יער', #@ -"-
-                40020: 'אין עצים',
-                40021: 'אין עצים'
-            }
-            # convert to lists:
-            row_fieldIDs = []
-            row_values = []
-            for fieldCode, value in row_values_d.items():
-                row_fieldIDs.append(fieldCode)
-                row_values.append(value)
-            self.writeSelf(row_fieldIDs, row_values)
-
-            # related table values:
-            row_values_d = {
-                'pt3': {
-                    43005: speciesComposition_dict.get(self.standtype),
-                    43006: 10
-                }
-            }
-            for relNickname, fieldValues in row_values_d.items():
-                fieldIDs = []
-                values = []
-                for fieldCode, value in fieldValues.items():
-                    fieldIDs.append(fieldCode)
-                    values.append(value)
-                self.writeRelated(relNickname, fieldIDs, values)
-
+            self.c__agriOrBuilt(self.standtype)
             # method ends here for stand types 3 and 4.
             return
 
@@ -1295,6 +1255,55 @@ class SekerPoint(FcRow):
         self.writeSelf(40121, self.v__vitalforest_desc)
         self.v__planttype_desc = self.c__planttype_desc()
         self.writeSelf(40122, self.v__planttype_desc)
+
+        return
+
+    def c__agriOrBuilt(self, standtype):
+        """
+        Handles cased of standtype 3 and 4, which are agricultural and built areas.
+        """
+        speciesComposition_dict = {
+            '3': 'חקלאות',
+            '4': 'שטח מבונה'
+        }
+        # write values accordingly:
+        # self values:
+        row_values_d= {
+            40111: speciesComposition_dict.get(standtype),
+            40110: 'לא יער',
+            40124: 'לא יער',
+            40022: 'לא רלוונטי',
+            40024: None,
+            40034: None,
+            40044: None,
+            40104: 'לא יער',
+            40020: 'אין עצים',
+            40021: 'אין עצים'
+        }
+        # convert to lists:
+        row_fieldIDs = []
+        row_values = []
+        for fieldCode, value in row_values_d.items():
+            row_fieldIDs.append(fieldCode)
+            row_values.append(value)
+        self.writeSelf(row_fieldIDs, row_values)
+
+        # related table values:
+        row_values_d = {
+            'pt3': {
+                43005: speciesComposition_dict.get(standtype),
+                43006: 10
+            }
+        }
+        for relNickname, fieldValues in row_values_d.items():
+            # first delete all related rows, then write new values:
+            self.deleteRelated(relNickname)
+            fieldIDs = []
+            values = []
+            for fieldCode, value in fieldValues.items():
+                fieldIDs.append(fieldCode)
+                values.append(value)
+            self.writeRelated(relNickname, fieldIDs, values)
 
         return
 
