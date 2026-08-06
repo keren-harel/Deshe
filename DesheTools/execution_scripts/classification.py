@@ -1271,11 +1271,14 @@ class SekerPoint(FcRow):
         row_values_d= {
             40111: speciesComposition_dict.get(standtype),
             40110: 'לא יער',
-            40124: 'לא יער',
+            40124: 'אין_עצים', #domain value has underscore instead of space.
             40022: 'לא רלוונטי',
             40024: None,
             40034: None,
             40044: None,
+            40025: None,
+            40035: None,
+            40045: None,
             40104: 'לא יער',
             40020: 'אין עצים',
             40021: 'אין עצים'

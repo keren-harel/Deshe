@@ -11,9 +11,9 @@ debug_mode = False
 addFields = True
 if debug_mode:
     #debug parameters
-    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.06.04\KfarHaHoresh_1102_verification.gdb'
-    input_stands = os.path.join(input_workspace, 'stands_1102_fnl')
-    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Kfar_HaHoresh')
+    input_workspace = r'C:\Users\Dedi\Desktop\עבודה\My GIS\דשא\מרץ 2024\QA\2026.07.28\smy_Guvrin_forProduct.gdb'
+    input_stands = os.path.join(input_workspace, 'stands_3205_fnl')
+    input_sekerpoints = os.path.join(input_workspace, 'smy_survey_Guvrin')
     #input_configurationFolder = r'INSERT CUSTOM PATH HERE'
     input_configurationFolder = os.path.join(os.path.dirname(__file__), '..', 'configuration')
     input_beitGidul = "ים-תיכוני"
@@ -1382,10 +1382,12 @@ class StandPolygon(FcRow):
         self.stamp = self.getStamp()
         #Validate and handle stand number duplications:
         self.validateStandDuplication()
-        self.points = self.getPoints(self.FC.relationships['sp'])
-        self.N_points = len(self.points)
+        self.N_points = len(self.getRelatedValues('sp', 40002))
         #Check if points' speciesComposition is 'חקלאות' / 'שטח מבונה'
         self.agriOrBuilt = self.checkAgriOrBuilt()
+        if not self.agriOrBuilt:
+            # Points' objects are not necessary if 'חקלאות' / 'שטח מבונה'.
+            self.points = self.getPoints(self.FC.relationships['sp'])
 
         self.calculateAndWrite()
         self.notifier.write()
@@ -5736,7 +5738,7 @@ counter = 1
 
 stands_uc = arcpy.UpdateCursor(
     org.stands.name,
-    #where_clause = 'OBJECTID IN (16, 57, 107, 201, 213, 216, 242, 251, 252, 253)', #for debug!!!
+    #where_clause = 'OBJECTID >31', #for debug!!!
     sort_fields = "%s A" % org.stands.oidFieldName
     )
 #Main iteration:
