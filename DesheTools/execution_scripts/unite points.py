@@ -5262,8 +5262,9 @@ class TotalCoverageMatrixCoordinator:
                 invalid_fieldsAndValues.append((columnName, invalidValue))
             if invalid_fieldsAndValues:
                 txt = '--[total cover matrix] Value is not in domain: %s' % invalid_fieldsAndValues
-                arcpy.AddMessage(f'~~warning~~: {txt}')
-                #arcpy.AddWarning(txt) #raises error somtimes
+                arcpy.AddMessage(f'~~text length~~:\t{len(txt)}')
+                arcpy.AddMessage(f'~~warning~~:\n\t{txt}')
+                #@arcpy.AddWarning(txt) #raises error somtimes
             #end of validation.
 
             #add to dict
