@@ -99,7 +99,7 @@ def run_analysis():
 
     thinning = analysis.identify_thinning(
         change,
-        config.EXPORT_SCALE
+        config.CHANGE_THRESHOLD
     )
 
 
