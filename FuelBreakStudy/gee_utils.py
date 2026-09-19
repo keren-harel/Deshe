@@ -81,7 +81,7 @@ def export_analysis_results(results, folder, scale=10):
     products = {
         "01_raster_before_focal": results["raster_before"],
         "02_raster_after_focal": results["raster_after"],
-        "05_vegetation_change": results["change"],
+        "05_vegetation_change_trees": results["change"],
         "06_thinning": results["thinning"],
     }
 
