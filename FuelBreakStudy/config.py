@@ -27,3 +27,23 @@ EXPORT_SCALE = 30 if USE_MEGA_PIXELS else 10
 VEGETATION_BANDS_BEFORE = ["b6"]
 
 VEGETATION_BANDS_AFTER = ["b6"]
+
+ANNUAL_RASTERS = {2020: RASTER_2020,
+                  2021:RASTER_2021,
+                  2022: RASTER_2022,
+                  2023:RASTER_2023,
+                  2024:RASTER_2024,
+                  2025:RASTER_2025}
+
+VEGETATION_BANDS_BY_YEAR = {
+    2018: ["b6", "b7"],
+    2019: ["b6", "b7"],
+    2020: ["b6", "b7"],
+    2021: ["b6", "b7"],
+    2022: ["b6", "b7"],
+    2023: ["b6", "b7"],
+    2024: ["b6", "b7"],
+    2025: ["b6", "b7"]
+}
+
+

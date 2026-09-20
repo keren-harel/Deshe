@@ -35,7 +35,12 @@ def export_raster(
 ):
     """
     Export an Earth Engine image to Google Drive.
+
+    Masked pixels are exported as -9999.
     """
+
+    # Convert masked pixels to NoData value
+    image = image.unmask(-9999)
 
     export_params = {
         "image": image,
@@ -43,7 +48,8 @@ def export_raster(
         "folder": folder,
         "region": region,
         "scale": scale,
-        "maxPixels": 1e13
+        "maxPixels": 1e13,
+        "fileFormat": "GeoTIFF"
     }
 
     if crs is not None:
@@ -58,7 +64,6 @@ def export_raster(
     print(f"Export started: {description}")
 
     return task
-
 def export_analysis_results(results, folder, scale=10):
     """
     Export all analysis raster products to Google Drive.
@@ -79,10 +84,9 @@ def export_analysis_results(results, folder, scale=10):
     region = results["buffer"]
 
     products = {
-        "01_raster_before_focal": results["raster_before"],
-        "02_raster_after_focal": results["raster_after"],
-        "05_vegetation_change_trees": results["change"],
-        "06_thinning": results["thinning"],
+        "vegetation_change_trees": results["change"],
+        "thinning": results["thinning"],
+        "mean_vegetation_growth": results["mean_vegetation_growth"]
     }
 
     tasks = []
@@ -100,3 +104,26 @@ def export_analysis_results(results, folder, scale=10):
         tasks.append(task)
 
     return tasks
+
+def load_annual_images(raster_assets, vegetation_bands_by_year):
+
+    images = []
+
+    for year, asset_id in raster_assets.items():
+
+        image = ee.Image(asset_id)
+
+        bands = vegetation_bands_by_year[year]
+
+        vegetation = (
+            image
+            .select(bands)
+            .reduce(ee.Reducer.sum())
+            .rename("vegetation")
+        )
+
+        vegetation = vegetation.set("year", year)
+
+        images.append(vegetation)
+
+    return ee.ImageCollection(images)

@@ -102,6 +102,26 @@ def run_analysis():
         config.CHANGE_THRESHOLD
     )
 
+    # ========================================================
+    # 9. Mean vegetation growth in thinning pixels
+    # ========================================================
+
+    # ==========================================
+    # 9. Calculate mean vegetation growth
+    #    only on thinning pixels
+    # ==========================================
+    annual_images = gee_utils.load_annual_images(
+        config.ANNUAL_RASTERS,
+        config.VEGETATION_BANDS_BY_YEAR
+    )
+
+    mean_vegetation_growth = (
+        analysis.calculate_mean_vegetation_growth(
+            annual_images,
+            thinning
+        )
+    )
+
 
     # ========================================================
     # Return products
@@ -109,12 +129,10 @@ def run_analysis():
 
     return {
         "buffer": buffer,
-
-        "raster_before": raster_before,
-        "raster_after": raster_after,
-
         "change": change,
-        "thinning": thinning
+        "thinning": thinning,
+
+        "mean_vegetation_growth": mean_vegetation_growth
     }
 
 
