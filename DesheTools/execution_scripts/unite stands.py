@@ -2658,6 +2658,7 @@ class StandPolygon(FcRow):
             50001,
             50024,
             50002, 50003, 50004,
+            50080, 50094, 50095, 50085, 50086,
             50027, 50081, 50042, 50043,
             50046, 50047, 50048, 50049, 
             50050, 50051, 50052, 50053, 
@@ -2994,6 +2995,12 @@ class PoductPolygon(FcRow):
             [50002, 50003, 50004],
             [tup[1] for tup in self.stamp[:3]]
         )
+        # STAND IDENTIFICATION FIELDS:
+        self.v__identification = self.c__identification()
+        self.writeSelf(
+            list(self.v__identification.keys()),
+            list(self.v__identification.values())
+        )
         
         self.v__generaldensity = self.c__density('general')
         self.v__standdensity = self.c__density('stand')
@@ -3186,6 +3193,62 @@ class PoductPolygon(FcRow):
         self.writeSelf(50087, self.v__pointvarianceindex)
 
         return
+
+    def c__identification(self):
+        """
+        Maneges the stand identification fields for the new utput stand.
+        Returns a dict of {fieldCode: value, ...}.
+        Runs in multiple ways:
+        1. any valid value (not null),
+        2. picks the later date,
+        3. calculate the area [dunam units].
+        """
+        stepName = 'identification'
+        result = {}
+        fieldCodes_1 = [50080, 50002, 50094, 50095]
+        rawValues_1 = self.getMatrix_self(fieldCodes_1)
+        rawValues_1 = [tup[1] for tup in rawValues_1]
+        nullFields = []
+
+        # 1. any valid value (not null)
+        for i, fieldCode in enumerate(fieldCodes_1):
+            values = [val[i] for val in rawValues_1]
+            validValues = [val for val in values if val is not None]
+            if validValues:
+                result[fieldCode] = validValues[0]
+            else:
+                nullFields.append(fieldCode)
+                result[fieldCode] = None
+        
+        
+        # 2. picks the later date:
+        fieldCode_2 = 50085
+        rawValues_2 = self.getMatrix_self(fieldCode_2)
+        rawValues_2 = [tup[1] for tup in rawValues_2]
+        # valid dates are not-null:
+        validDates = [val for val in rawValues_2 if val is not None]
+        if len(validDates) == len(rawValues_2):
+            # both values are valid dates - pick the later one
+            laterDate = max(validDates)
+            result[fieldCode_2] = laterDate
+        elif len(validDates) == 1:
+            # only one value is valid - pick it
+            result[fieldCode_2] = validDates[0]
+        else:
+            nullFields.append(fieldCode_2)
+            result[fieldCode_2] = None
+
+        # 3. calculate the area [dunam units]:
+        area_dunam = self.shape.getArea("GEODESIC", "SquareMeters")/1000
+        result[50086] = area_dunam
+
+        # notify in case fields are null:
+        if nullFields:
+            fieldsTxt = ', '.join([f'{fieldsDict[code].alias} ({code})' for code in nullFields])
+            txt = f'Fields are <null> in both input stands: {fieldsTxt}.'
+            self.notifier.add(stepName,'warning', txt)
+        
+        return result
 
     def c__density(self, mode):
         """
