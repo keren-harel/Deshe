@@ -127,10 +127,10 @@ def check_duplicates(data_frame, id, check_field):
     return grouped_duplicates
 
 def error_to_dict(data_frame, eror_location, text_for_error):
-    for index, row in data_frame.iterrows():
-        globalid = row[0]
-        x = row[1]
-        y = row[2]
+    for _, row in data_frame.iterrows():
+        globalid = row["globalid"]
+        x = row["X_coords"]
+        y = row["Y_coords"]
 
         if globalid not in error_dict["GlobalID"]:
             error_dict["GlobalID"].append(globalid)
