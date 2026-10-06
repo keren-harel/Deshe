@@ -41,6 +41,17 @@ standVegFormExcel = os.path.join(input_configurationFolder, 'StandVegForm.xlsx')
 speciesCompositionExcel = os.path.join(input_configurationFolder, 'species composition.xlsx')
 relativeDensityKeyExcel = os.path.join(input_configurationFolder, 'relativeDensityKey.xlsx')
 totalCoverageExcel = os.path.join(input_configurationFolder, 'TotalCoverage.xlsx')
+
+#@debug prints:###############################
+arcpy.AddMessage("code started. vereifying tables locations:")
+arcpy.AddMessage(f'configuration folder:\n{input_configurationFolder}')
+arcpy.AddMessage(f'forestVegFormExcel: {os.path.exists(forestVegFormExcel)}')
+arcpy.AddMessage(f'standVegFormExcel: {os.path.exists(standVegFormExcel)}')
+arcpy.AddMessage(f'speciesCompositionExcel: {os.path.exists(speciesCompositionExcel)}')
+arcpy.AddMessage(f'relativeDensityKeyExcel: {os.path.exists(relativeDensityKeyExcel)}')
+arcpy.AddMessage(f'totalCoverageExcel: {os.path.exists(totalCoverageExcel)}')
+#@debug prints:###############################
+
 #GDB that contains all the domains needed.
 origin_GDB = os.path.join(input_configurationFolder, 'origin.gdb')
 origin_GDB_domains = arcpy.Describe(origin_GDB).domains
@@ -423,6 +434,12 @@ def fieldsExcelToDict(excelPath, sheet):
     arcpy.AddMessage(message)
 
     tempTableName = os.path.join("in_memory", "fieldsTable")
+    #@debug prints:
+    arcpy.AddMessage("ExcelToTable_conversion")
+    arcpy.AddMessage(excelPath)
+    arcpy.AddMessage(tempTableName)
+    arcpy.AddMessage(sheet)
+
     arcpy.ExcelToTable_conversion(excelPath, tempTableName, Sheet=sheet)
     #check all the following fields exist in tempTable:
     fieldNames = [field.name.lower() for field in arcpy.Describe(tempTableName).fields]
@@ -916,6 +933,9 @@ class Organizer:
 
 class RelationshipClass:
     def __init__(self, relationshipName, nickname, originFC):
+        #@debug prints:
+        arcpy.AddMessage(f'relationshipName: {relationshipName}')
+        
         self.desc = arcpy.Describe(relationshipName)
         self.name = self.desc.name
         self.nickname = nickname
@@ -2533,7 +2553,7 @@ class StandPolygon(FcRow):
         covtypeList = [("3042", 5), ("3044", 5)]
         """
         #Set values of relevant nodes:
-        for codedValue,proportion in covtypeList:
+        for codedValue, proportion in covtypeList:
             root.findAndSet(codedValue, proportion)
         iterableNodes = root.getNodesWithValue()
         #create a result object for covtype:
@@ -2603,7 +2623,15 @@ class StandPolygon(FcRow):
                     self.notifier.add(stepName, 'warning', txt)
                 #return. that means the logic ends here.
                 return resultObj
-        
+
+        #check if there are any valueable nodes at all,
+        #and return the empty resultObj if not:
+        if len(iterableNodes) == 0:
+            txt = f'Stand has no valueable species calculated in {stands_relatedTables["st3"]["name"]} related table.'
+            self.notifier.add(stepName, 'warning', txt)
+            resultObj.str = "no valueable species"
+            return resultObj
+
         #check nodes' own value
         for node in iterableNodes:
             if node.value >= 8:
@@ -2833,8 +2861,9 @@ class StandPolygon(FcRow):
                         return resultObj
         
         #In case an unpredicted situation happened, return a default result obj and warn.
-        self.warnings.append("Could not determine species composition.")
-        resultObj.str = "Could not determine."
+        txt = "Could not determine species composition."
+        self.notifier.add(stepName, 'warning', txt)
+        resultObj.str = "Could not determine"
         return resultObj
 
     def c__forestagecomposition_old(self):
@@ -5233,7 +5262,9 @@ class TotalCoverageMatrixCoordinator:
                 invalid_fieldsAndValues.append((columnName, invalidValue))
             if invalid_fieldsAndValues:
                 txt = '--[total cover matrix] Value is not in domain: %s' % invalid_fieldsAndValues
-                arcpy.AddWarning(txt)
+                arcpy.AddMessage(f'~~text length~~:\t{len(txt)}')
+                arcpy.AddMessage(f'~~warning~~:\n\t{txt}')
+                #@arcpy.AddWarning(txt) #raises error somtimes
             #end of validation.
 
             #add to dict
