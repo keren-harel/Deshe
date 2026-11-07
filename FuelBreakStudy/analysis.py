@@ -55,88 +55,103 @@ def identify_thinning(change, threshold=15):
         .rename("thinning")
     )
 
-def calculate_mean_vegetation_growth(
-    images,
-    thinning
+
+def calculate_vegetation_recovery_metrics(
+        annual_images,
+        thinning,
+        tree_pre,
+        tree_t0,
 ):
     """
-    Calculate the mean annual percentage change in vegetation
-    for pixels identified as thinning.
-
-    The percentage change is calculated between consecutive years:
-
-        ((after - before) / before) * 100
-
-    Pixels where the vegetation value in the previous year is 0
-    are excluded from the calculation.
-
-    Parameters
-    ----------
-    images : ee.ImageCollection
-        Annual vegetation rasters. Each image must contain
-        a band named 'vegetation' and a 'year' property.
-
-    thinning : ee.Image
-        Binary raster where:
-            1 = thinning pixel
-            0 = non-thinning pixel
-
-    Returns
-    -------
-    ee.Image
-        Raster containing the mean annual percentage vegetation
-        change for thinning pixels.
+    Calculate three vegetation recovery metrics for thinned pixels.
     """
 
-    # Sort images chronologically
-    images = images.select(["vegetation"]).sort("year")
+    # Sort annual images by year
+    annual_images = annual_images.sort("year")
 
-    image_list = images.toList(images.size())
-    n_images = images.size()
+    # Select the tree-cover band for each year
 
-    # Calculate percentage change between consecutive years
-    def calculate_change(i):
 
-        i = ee.Number(i)
 
-        before = ee.Image(image_list.get(i))
-        after = ee.Image(image_list.get(i.add(1)))
 
-        before_value = before.select("vegetation")
-        after_value = after.select("vegetation")
+    # Sort again after selecting bands
+    annual_images = annual_images.sort("year")
 
-        # Avoid division by zero
-        valid = before_value.neq(0)
+    images_list = annual_images.toList(annual_images.size())
 
-        change_percent = (
-            after_value
-            .subtract(before_value)
-            .divide(before_value)
-            .multiply(100)
-            .updateMask(valid)
-            .rename("change_percent")
-        )
+    # First and last images
+    first_image = ee.Image(images_list.get(0))
+    last_image = ee.Image(
+        images_list.get(annual_images.size().subtract(1))
+    )
 
-        return change_percent
+    tree_pre = tree_pre.rename("tree_pre")
+    tree_t0 = tree_t0.rename("tree_t0")
+    tree_current = last_image.rename("tree_current")
 
-    # Create an ImageCollection of annual percentage changes
-    changes = ee.ImageCollection(
+    # --------------------------------------------------
+    # 1. Recovery Score
+    # --------------------------------------------------
+
+    denominator = tree_pre.subtract(tree_t0)
+
+    recovery_score = (
+        tree_current.subtract(tree_t0)
+        .divide(denominator)
+        .multiply(100)
+        .rename("recovery_score")
+        .updateMask(denominator.neq(0))
+    )
+
+    # --------------------------------------------------
+    # 2. Growth Trend
+    # --------------------------------------------------
+
+    changes = ee.ImageCollection.fromImages(
         ee.List.sequence(
-            0,
-            n_images.subtract(2)
-        ).map(calculate_change)
+            1,
+            annual_images.size().subtract(1)
+        ).map(
+            lambda i: (
+                ee.Image(images_list.get(i))
+                .subtract(
+                    ee.Image(
+                        images_list.get(
+                            ee.Number(i).subtract(1)
+                        )
+                    )
+                )
+                .rename("annual_change")
+            )
+        )
     )
 
-    # Calculate mean annual change
-    mean_growth = (
-        changes
-        .mean()
-        .rename("mean_vegetation_growth")
+    growth_trend = changes.mean().rename("growth_trend")
+
+    # --------------------------------------------------
+    # 3. Consistency
+    # --------------------------------------------------
+
+    positive_changes = changes.map(
+        lambda image: image.gt(0).rename("positive_change")
     )
 
-    # Keep only thinning pixels
-    mean_growth = mean_growth.updateMask(
-        thinning.eq(1)
+    consistency = (
+        positive_changes.sum()
+        .divide(changes.count())
+        .multiply(100)
+        .rename("consistency")
     )
 
-    return mean_growth
+    # --------------------------------------------------
+    # Combine metrics and mask to thinning pixels
+    # --------------------------------------------------
+
+    metrics = (
+        recovery_score
+        .addBands(growth_trend)
+        .addBands(consistency)
+        .updateMask(thinning.eq(1))
+    )
+
+    return metrics

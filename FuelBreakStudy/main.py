@@ -115,10 +115,12 @@ def run_analysis():
         config.VEGETATION_BANDS_BY_YEAR
     )
 
-    mean_vegetation_growth = (
-        analysis.calculate_mean_vegetation_growth(
+    vegetation_growth_metrics = (
+        analysis.calculate_vegetation_recovery_metrics(
             annual_images,
-            thinning
+            thinning,
+            raster_before,
+            raster_after
         )
     )
 
@@ -132,7 +134,7 @@ def run_analysis():
         "change": change,
         "thinning": thinning,
 
-        "mean_vegetation_growth": mean_vegetation_growth
+        "vegetation_growth_metrics": vegetation_growth_metrics
     }
 
 

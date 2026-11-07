@@ -86,7 +86,7 @@ def export_analysis_results(results, folder, scale=10):
     products = {
         "vegetation_change_trees": results["change"],
         "thinning": results["thinning"],
-        "mean_vegetation_growth": results["mean_vegetation_growth"]
+        "mean_vegetation_growth": results["vegetation_growth_metrics"]
     }
 
     tasks = []
@@ -111,19 +111,24 @@ def load_annual_images(raster_assets, vegetation_bands_by_year):
 
     for year, asset_id in raster_assets.items():
 
+        year_int = int(year)
+
         image = ee.Image(asset_id)
 
         bands = vegetation_bands_by_year[year]
 
-        vegetation = (
-            image
-            .select(bands)
-            .reduce(ee.Reducer.sum())
-            .rename("vegetation")
-        )
+        # Select vegetation bands
+        vegetation = image.select(bands)
 
-        vegetation = vegetation.set("year", year)
+        # If more than one band, calculate their sum
+        if len(bands) > 1:
+            vegetation = vegetation.reduce(ee.Reducer.sum())
+
+        vegetation = vegetation.rename("vegetation")
+
+        # Set year property
+        vegetation = vegetation.set("year", year_int)
 
         images.append(vegetation)
 
-    return ee.ImageCollection(images)
+    return ee.ImageCollection.fromImages(images)

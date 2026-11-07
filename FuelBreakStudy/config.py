@@ -28,6 +28,15 @@ VEGETATION_BANDS_BEFORE = ["b6"]
 
 VEGETATION_BANDS_AFTER = ["b6"]
 
+RASTERS = {2018: RASTER_2020,
+2019: RASTER_2020,
+    2020: RASTER_2020,
+                  2021:RASTER_2021,
+                  2022: RASTER_2022,
+                  2023:RASTER_2023,
+                  2024:RASTER_2024,
+                  2025:RASTER_2025}
+
 ANNUAL_RASTERS = {2020: RASTER_2020,
                   2021:RASTER_2021,
                   2022: RASTER_2022,
@@ -35,15 +44,15 @@ ANNUAL_RASTERS = {2020: RASTER_2020,
                   2024:RASTER_2024,
                   2025:RASTER_2025}
 
-VEGETATION_BANDS_BY_YEAR = {
-    2018: ["b6", "b7"],
-    2019: ["b6", "b7"],
-    2020: ["b6", "b7"],
-    2021: ["b6", "b7"],
-    2022: ["b6", "b7"],
-    2023: ["b6", "b7"],
-    2024: ["b6", "b7"],
-    2025: ["b6", "b7"]
+VEGETATION_TREE_BAND_BY_YEAR = {
+    2018: ["b6"],
+    2019: ["b6"],
+    2020: ["b6"],
+    2021: ["b6"],
+    2022: ["b6"],
+    2023: ["b6"],
+    2024: ["b7"],
+    2025: ["b7"]
 }
 
 
