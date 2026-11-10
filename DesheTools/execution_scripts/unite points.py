@@ -5767,20 +5767,51 @@ arcpy.SetProgressor("step",message,0,featureCount,1)
 arcpy.AddMessage(message)
 counter = 1
 
-stands_uc = arcpy.UpdateCursor(
-    org.stands.name,
-    #where_clause = 'OBJECTID >31', #for debug!!!
-    sort_fields = "%s A" % org.stands.oidFieldName
-    )
-#Main iteration:
-for stand_r in stands_uc:
-    tempMessage = 'Calculating... (row: %s of %s feafures)' % (counter, featureCount)
-    arcpy.SetProgressorLabel(tempMessage)
+arcpy.AddMessage('STANDS PATH: ' + org.stands.fullPath)
 
-    standObj = StandPolygon(stand_r, org.stands)
-    stands_uc.updateRow(standObj.row)
+#Run inside an explicit edit session so that every write is committed on stopEditing.
+edit = arcpy.da.Editor(org.stands.workspace)
+edit.startEditing(False, False)
+edit.startOperation()
+try:
+    stands_uc = arcpy.UpdateCursor(
+        org.stands.name,
+        #where_clause = 'OBJECTID >31', #for debug!!!
+        sort_fields = "%s A" % org.stands.oidFieldName
+        )
+    #Main iteration:
+    for stand_r in stands_uc:
+        tempMessage = 'Calculating... (row: %s of %s feafures)' % (counter, featureCount)
+        arcpy.SetProgressorLabel(tempMessage)
 
-    arcpy.SetProgressorPosition()
-    counter += 1
-del stands_uc
+        standObj = StandPolygon(stand_r, org.stands)
+        stands_uc.updateRow(standObj.row)
+
+        arcpy.SetProgressorPosition()
+        counter += 1
+    del stands_uc
+    edit.stopOperation()
+    edit.stopEditing(True)  #True = save edits
+except Exception:
+    try:
+        edit.stopOperation()
+        edit.stopEditing(False)
+    except Exception:
+        pass
+    raise
+
+#Verification: read back from disk and report how many stands got values.
+_chk_fields = [fieldsDict[c].name for c in (50038, 50039, 50086)]
+_filled = [0, 0, 0]
+_total = 0
+with arcpy.da.SearchCursor(org.stands.fullPath, _chk_fields) as _sc:
+    for _row in _sc:
+        _total += 1
+        for _i, _v in enumerate(_row):
+            if _v not in (None, ''):
+                _filled[_i] += 1
+arcpy.AddMessage('READBACK: %s stands; non-empty %s = %s' % (_total, _chk_fields, _filled))
+
+arcpy.management.ClearWorkspaceCache()
+del org
 print('done')
