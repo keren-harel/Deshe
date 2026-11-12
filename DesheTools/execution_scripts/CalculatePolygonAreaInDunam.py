@@ -1,5 +1,7 @@
 #----------------------------
-# Last updated: 21/07/2025 
+# Calculate Polygon Area In Dunam
+# Geodesic version - works in ANY coordinate system
+# (ITM, WGS84, Web Mercator, UTM, ...)
 #----------------------------
 
 import arcpy
@@ -9,12 +11,17 @@ try:
     input_layer = arcpy.GetParameterAsText(0)
     area_field = arcpy.GetParameterAsText(1)
 
-    # בדיקת מערכת קואורדינטות
+    # בדיקת מערכת קואורדינטות (מידע בלבד - החישוב גאודזי ולכן לא תלוי בהטלה)
     spatial_ref = arcpy.Describe(input_layer).spatialReference
-    arcpy.AddMessage(f"Detected coordinate system: {spatial_ref.name} (EPSG:{spatial_ref.factoryCode})")
+    if spatial_ref is None or spatial_ref.type == "Unknown":
+        raise ValueError("The layer has no coordinate system defined. Define it first (Define Projection).")
 
-    if spatial_ref.factoryCode not in [2039, 6991]:
-        arcpy.AddError("Warning: The coordinate system is not ITM (EPSG:2039) or ICS (EPSG:6991). Area calculations may be inaccurate.")
+    arcpy.AddMessage(f"Detected coordinate system: {spatial_ref.name} (EPSG:{spatial_ref.factoryCode})")
+    arcpy.AddMessage("Calculating GEODESIC area, independent of the layer's projection.")
+
+    if spatial_ref.factoryCode in (3857, 102100, 102113):
+        arcpy.AddWarning("The layer is in Web Mercator. Planar areas (Shape_Area) in this system are inflated by ~41% in Israel; "
+                         "the geodesic result written here is correct, but Shape_Area is not.")
 
     # בדיקה אם השדה קיים
     fields = [f.name for f in arcpy.ListFields(input_layer)]
@@ -25,16 +32,25 @@ try:
     else:
         arcpy.AddMessage(f"The field '{area_field}' already exists. Existing values will be overwritten.")
 
-    # חישוב שטח בדונמים עם עיגול לשתי ספרות
+    # חישוב שטח גאודזי בדונמים (מ"ר / 1000), עיגול לשתי ספרות
     count = 0
-    with arcpy.da.UpdateCursor(input_layer, ['SHAPE@AREA', area_field]) as cursor:
+    skipped = 0
+    total_dunam = 0.0
+    with arcpy.da.UpdateCursor(input_layer, ['SHAPE@', area_field]) as cursor:
         for row in cursor:
-            if row[0] is not None:
-                row[1] = round(row[0] / 1000, 2)
-                cursor.updateRow(row)
-                count += 1
+            geom = row[0]
+            if geom is None:
+                skipped += 1
+                continue
+            area_m2 = geom.getArea("GEODESIC", "SQUAREMETERS")
+            dunam = round(area_m2 / 1000.0, 2)
+            row[1] = dunam
+            cursor.updateRow(row)
+            total_dunam += dunam
+            count += 1
 
-    arcpy.AddMessage(f"Calculation completed successfully. {count} features were updated.")
+    arcpy.AddMessage(f"Calculation completed successfully. {count} features were updated, {skipped} skipped (null geometry).")
+    arcpy.AddMessage(f"Total area: {total_dunam:,.2f} dunam")
 
 except Exception as e:
     arcpy.AddError(f"Field update failed: {str(e)}")
