@@ -5,6 +5,51 @@ import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
+ITM_WKID = 2039
+
+def is_itm(layer):
+    """Checks whether a layer is already in Israel TM Grid (ITM)."""
+    sr = arcpy.Describe(layer).spatialReference
+    return sr.factoryCode == ITM_WKID or sr.name == "Israel_TM_Grid"
+
+def ensure_itm(layer, workspace_path, out_name):
+    """
+    Returns (layer_path, was_converted).
+    If the layer is already in ITM it is returned as is,
+    otherwise a projected copy is created in the workspace.
+    """
+    in_sr = arcpy.Describe(layer).spatialReference
+
+    if in_sr.name == "Unknown":
+        raise arcpy.ExecuteError(f"Layer '{layer}' has no coordinate system defined - cannot project.")
+
+    if is_itm(layer):
+        arcpy.AddMessage(f"'{layer}' is already in ITM - no conversion needed.")
+        return layer, False
+
+    arcpy.AddWarning(f"'{layer}' is in '{in_sr.name}' - converting to ITM...")
+    out_sr = arcpy.SpatialReference(ITM_WKID)
+    out_path = arcpy.CreateUniqueName(out_name, workspace_path)
+
+    # WGS84-based systems (including Web Mercator) use the known transformation;
+    # otherwise take the first suggested transformation (if any)
+    if in_sr.GCS.name == "GCS_WGS_1984":
+        transform = "WGS_1984_To_Israel_CoordFrame"
+    else:
+        transforms = arcpy.ListTransformations(in_sr, out_sr)
+        transform = transforms[0] if transforms else ""
+
+    arcpy.management.Project(
+        in_dataset=layer,
+        out_dataset=out_path,
+        out_coor_system=out_sr,
+        transform_method=transform,
+        in_coor_system=in_sr,
+        preserve_shape="NO_PRESERVE_SHAPE",
+        max_deviation=None,
+        vertical="NO_VERTICAL")
+    return out_path, True
+
 # Converts an input layer to a new coordinate system
 def project(input_points_layer, workspace_path):
     # Construct the full output path by combining the workspace and feature class name
@@ -218,16 +263,18 @@ input_VitalForest = arcpy.GetParameterAsText(5)
 #!---------------------------------
 
 input_smy_points = input_points_layer
-input_stands = input_poligons_layer
-
-# Add a new field to the stands layer and calculates its values ​​based on the object ID of the attribute
-arcpy.management.AddField(input_stands, "standID", "SHORT")
-arcpy.management.CalculateField(input_stands, "standID", "$feature.OBJECTID", "ARCADE")
 
 # Setting the workspace path based on the input points layer
 workspace = arcpy.Describe(input_smy_points).path
 output_doublePoints = None
 intermediate_layers = []
+
+# Make sure the stands (polygons) layer is in ITM; convert if needed
+input_stands, stands_converted = ensure_itm(input_poligons_layer, workspace, "stands_for_2nd_discussion")
+
+# Add a new field to the stands layer and calculate its values based on the object ID
+arcpy.management.AddField(input_stands, "standID", "SHORT")
+arcpy.management.CalculateField(input_stands, "standID", "$feature.OBJECTID", "ARCADE")
 
 # When creating intermediate layers, add them to the list
 points_ITM = project(input_smy_points, workspace)
@@ -573,13 +620,15 @@ else:
 # Define the output feature class name
 workspace = arcpy.Describe(input_points_layer).path
 output_markErrorPoints = arcpy.CreateUniqueName("mark_error_points", workspace)
-sr = arcpy.SpatialReference(4326)
+sr = arcpy.Describe(input_points_layer).spatialReference
 dict_to_FeatureClass(error_dict, output_markErrorPoints, sr)
 
 try:
     aprx = arcpy.mp.ArcGISProject("CURRENT")
     map = aprx.activeMap
     map.addDataFromPath(output_markErrorPoints)
+    if stands_converted:
+        map.addDataFromPath(input_stands)
     if output_doublePoints:
         map.addDataFromPath(output_doublePoints)
         arcpy.AddMessage("The point layers have been exported and added to the map successfully!")
