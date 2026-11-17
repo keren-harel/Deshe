@@ -42,7 +42,7 @@ def ensure_itm(layer, workspace_path, out_name):
         arcpy.AddMessage(f"'{layer}' is already in ITM - no conversion needed.")
         return layer, False
 
-    arcpy.AddWarning(f"'{layer}' is in '{in_sr.name}' - converting to ITM...")
+    arcpy.AddMessage(f"'{layer}' is in '{in_sr.name}' - converting to ITM...")
     out_sr = arcpy.SpatialReference(ITM_WKID)
     out_path = arcpy.CreateUniqueName(out_name, workspace_path)
 
