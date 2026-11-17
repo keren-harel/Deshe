@@ -4,9 +4,24 @@ import arcpy
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
+import os
 
 ITM_WKID = 2039
 
+
+def find_related_tables(points_layer, wanted_names):
+    desc = arcpy.Describe(points_layer)
+    workspace = os.path.dirname(desc.catalogPath)   # the .gdb
+
+    found = {}
+    for rc_name in desc.relationshipClassNames:
+        rc = arcpy.Describe(os.path.join(workspace, rc_name))
+        for dest in rc.destinationClassNames:
+            for wanted in wanted_names:
+                if wanted.lower() in dest.lower() and wanted not in found:
+                    found[wanted] = os.path.join(workspace, dest)
+    return found
+    
 def is_itm(layer):
     """Checks whether a layer is already in Israel TM Grid (ITM)."""
     sr = arcpy.Describe(layer).spatialReference
@@ -253,11 +268,23 @@ def find_reception_problems(df_point):
 # Input parameters from ArcGIS tool box
 input_points_layer = arcpy.GetParameterAsText(0)
 input_poligons_layer = arcpy.GetParameterAsText(1)
-input_StartRepeatDominTree = arcpy.GetParameterAsText(2)
-input_PlantTypeCoverDistribut = arcpy.GetParameterAsText(3)
-input_InvasiveSpecies = arcpy.GetParameterAsText(4)
-input_VitalForest = arcpy.GetParameterAsText(5)
 
+# Related tables: taken from the tool if provided, otherwise found automatically
+table_names = ["StartRepeatDominTree", "PlantTypeCoverDistribut",
+               "InvasiveSpecies", "VitalForest"]
+related = find_related_tables(input_points_layer, table_names)
+
+input_StartRepeatDominTree    = arcpy.GetParameterAsText(2) or related.get("StartRepeatDominTree")
+input_PlantTypeCoverDistribut = arcpy.GetParameterAsText(3) or related.get("PlantTypeCoverDistribut")
+input_InvasiveSpecies         = arcpy.GetParameterAsText(4) or related.get("InvasiveSpecies")
+input_VitalForest             = arcpy.GetParameterAsText(5) or related.get("VitalForest")
+
+for name, val in [("StartRepeatDominTree", input_StartRepeatDominTree),
+                  ("PlantTypeCoverDistribut", input_PlantTypeCoverDistribut),
+                  ("InvasiveSpecies", input_InvasiveSpecies),
+                  ("VitalForest", input_VitalForest)]:
+    if not val:
+        raise ValueError(f"Could not find the related table '{name}' - please provide it manually.")
 #!---------------------------------
 #! Double Points
 #!---------------------------------
