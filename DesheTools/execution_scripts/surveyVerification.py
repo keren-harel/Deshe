@@ -274,10 +274,10 @@ table_names = ["StartRepeatDominTree", "PlantTypeCoverDistribut",
                "InvasiveSpecies", "VitalForest"]
 related = find_related_tables(input_points_layer, table_names)
 
-input_StartRepeatDominTree    = arcpy.GetParameterAsText(2) or related.get("StartRepeatDominTree")
-input_PlantTypeCoverDistribut = arcpy.GetParameterAsText(3) or related.get("PlantTypeCoverDistribut")
-input_InvasiveSpecies         = arcpy.GetParameterAsText(4) or related.get("InvasiveSpecies")
-input_VitalForest             = arcpy.GetParameterAsText(5) or related.get("VitalForest")
+input_StartRepeatDominTree    = related.get("StartRepeatDominTree")
+input_PlantTypeCoverDistribut = related.get("PlantTypeCoverDistribut")
+input_InvasiveSpecies         = related.get("InvasiveSpecies")
+input_VitalForest             = related.get("VitalForest")
 
 for name, val in [("StartRepeatDominTree", input_StartRepeatDominTree),
                   ("PlantTypeCoverDistribut", input_PlantTypeCoverDistribut),
