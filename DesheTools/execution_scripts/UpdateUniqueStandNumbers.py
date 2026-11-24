@@ -99,5 +99,4 @@ if __name__ == "__main__":
             arcpy.AddError("3. בסיום: Edit ← Save, ואז Stop Editing.")
             arcpy.AddError("לא בוצע שום שינוי בנתונים.")
         else:
-            # כל שגיאה אחרת – מוצגת כרגיל
             raise
