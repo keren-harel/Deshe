@@ -82,4 +82,22 @@ def update_stand_numbers(polygon_layer, assign_to_invalid=True):
 if __name__ == "__main__":
     layer = arcpy.GetParameterAsText(0)
     assign_invalid_param = arcpy.GetParameterAsText(1).lower() == 'true'
-    update_stand_numbers(layer, assign_to_invalid=assign_invalid_param)
+
+    try:
+        update_stand_numbers(layer, assign_to_invalid=assign_invalid_param)
+
+    except RuntimeError as e:
+        if "edit session" in str(e).lower():
+            arcpy.AddError("לא ניתן לעדכן את שכבת העומדים כי היא לא במצב עריכה.")
+            arcpy.AddError(
+                "הסיבה הנפוצה: השכבה נמצאת בתוך Feature Dataset ב-GDB, "
+                "ולכן ArcGIS דורש סשן עריכה פעיל כדי לשנות אותה."
+            )
+            arcpy.AddError("מה עושים:")
+            arcpy.AddError("1. ב-ArcGIS Pro: לשונית Edit ← Manage Edits ← Edit (Start Editing).")
+            arcpy.AddError("2. מריצים שוב את הכלי.")
+            arcpy.AddError("3. בסיום: Edit ← Save, ואז Stop Editing.")
+            arcpy.AddError("לא בוצע שום שינוי בנתונים.")
+        else:
+            # כל שגיאה אחרת – מוצגת כרגיל
+            raise
